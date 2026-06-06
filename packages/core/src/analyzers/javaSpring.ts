@@ -1,6 +1,5 @@
 import fg from "fast-glob";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type {
   BizGlanceDocument,
   BusinessObject,
@@ -8,29 +7,67 @@ import type {
   StatusMutation
 } from "../schema";
 
+function toKebabCase(value: string) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/_/g, "-")
+    .toLowerCase();
+}
+
+function toDisplayName(technicalName: string) {
+  const overrides: Record<string, string> = {
+    PurchaseOrder: "采购订单"
+  };
+
+  return overrides[technicalName] ?? technicalName;
+}
+
 export async function analyzeJavaSpringProject(root: string): Promise<BizGlanceDocument> {
   const files = await fg("**/*.java", { cwd: root, absolute: true });
+  const fileContents = await Promise.all(
+    files.map(async (file) => ({
+      file,
+      content: await readFile(file, "utf8")
+    }))
+  );
   const businessObjects: BusinessObject[] = [];
   const evidences: Evidence[] = [];
   const statusMutations: StatusMutation[] = [];
+  const businessObjectByTechnicalName = new Map<string, BusinessObject>();
 
-  for (const file of files) {
-    const content = await readFile(file, "utf8");
+  for (const { file, content } of fileContents) {
+    const classMatch = content.match(/class\s+([A-Z][A-Za-z0-9]+)/);
+    const isDomainObject = /[\\/]+domain[\\/]/.test(file);
 
-    if (content.includes("class PurchaseOrder")) {
-      businessObjects.push({
-        id: "purchase-order",
-        name: "采购订单",
-        technicalName: "PurchaseOrder",
-        module: "purchase"
-      });
+    if (classMatch && isDomainObject) {
+      const technicalName = classMatch[1];
+      const id = toKebabCase(technicalName);
+      const businessObject = {
+        id,
+        name: toDisplayName(technicalName),
+        technicalName,
+        module: id.split("-")[0]
+      };
+
+      businessObjects.push(businessObject);
+      businessObjectByTechnicalName.set(technicalName, businessObject);
       evidences.push({
-        id: "repo-object",
-        title: "PurchaseOrder domain",
+        id: `repo-object-${id}`,
+        title: `${technicalName} domain`,
         filePath: file,
-        symbol: "PurchaseOrder",
-        summary: "识别到采购订单领域对象"
+        symbol: technicalName,
+        summary: `识别到 ${technicalName} 领域对象`
       });
+    }
+  }
+
+  for (const { file, content } of fileContents) {
+    const matchedObject = Array.from(businessObjectByTechnicalName.values()).find((item) =>
+      content.includes(item.technicalName ?? "")
+    );
+
+    if (!matchedObject) {
+      continue;
     }
 
     if (
@@ -38,18 +75,29 @@ export async function analyzeJavaSpringProject(root: string): Promise<BizGlanceD
       content.includes("changeStatus(") ||
       content.includes("updateStatus(")
     ) {
+      const evidenceId = `repo-status-${matchedObject.id}`;
       statusMutations.push({
         id: `status-${statusMutations.length + 1}`,
-        objectId: "purchase-order",
+        objectId: matchedObject.id,
         field: "status",
         trigger: "changeStatus",
         toStatus: "APPROVED",
         sourceKind: "explicit",
         confidence: "medium",
-        evidenceIds: ["repo-status"]
+        evidenceIds: [evidenceId]
+      });
+
+      evidences.push({
+        id: evidenceId,
+        title: `${matchedObject.name}状态变更`,
+        filePath: file,
+        symbol: matchedObject.technicalName,
+        summary: `识别到 ${matchedObject.technicalName} 的状态写入调用`
       });
     }
   }
+
+  const primaryObject = businessObjects[0];
 
   return {
     meta: {
@@ -64,32 +112,22 @@ export async function analyzeJavaSpringProject(root: string): Promise<BizGlanceD
       warnings: businessObjects.length > 0 ? [] : ["未识别到业务对象"]
     },
     businessObjects,
-    flows: [
-      {
-        id: "repo-flow-1",
-        from: "purchase-order",
-        to: "purchase-order",
-        relation: "updates",
-        label: "变更采购订单状态",
-        sourceKind: "inferred",
-        confidence: "medium",
-        evidenceIds: ["repo-status"]
-      }
-    ],
+    flows: primaryObject
+      ? [
+          {
+            id: "repo-flow-1",
+            from: primaryObject.id,
+            to: primaryObject.id,
+            relation: "updates",
+            label: `变更${primaryObject.name}状态`,
+            sourceKind: "inferred",
+            confidence: "medium",
+            evidenceIds: [`repo-status-${primaryObject.id}`]
+          }
+        ]
+      : [],
     statusMutations,
     fieldLineages: [],
-    evidences: [
-      ...evidences,
-      {
-        id: "repo-status",
-        title: "采购订单状态变更",
-        filePath: join(
-          root,
-          "src/main/java/com/example/demo/service/impl/PurchaseOrderServiceImpl.java"
-        ),
-        symbol: "PurchaseOrderServiceImpl.changeStatus",
-        summary: "识别到 setStatus 与 Mapper 更新调用"
-      }
-    ]
+    evidences
   };
 }

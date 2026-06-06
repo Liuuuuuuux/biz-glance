@@ -7,13 +7,32 @@ type ViewName = "document" | "status" | "field";
 
 export function WorkbenchLayout(props: {
   document: BizGlanceDocument;
+  filteredObjects: BusinessObject[];
   view: ViewName;
   selectedObject: BusinessObject | null;
+  searchQuery: string;
+  moduleFilter: string;
   onViewChange: (view: ViewName) => void;
   onSelectObject: (id: string) => void;
+  onSearchQueryChange: (value: string) => void;
+  onModuleFilterChange: (value: string) => void;
 }) {
-  const { document, view, selectedObject, onViewChange, onSelectObject } = props;
+  const {
+    document,
+    filteredObjects,
+    view,
+    selectedObject,
+    searchQuery,
+    moduleFilter,
+    onViewChange,
+    onSelectObject,
+    onSearchQueryChange,
+    onModuleFilterChange
+  } = props;
   const evidenceIds = new Set<string>();
+  const modules = Array.from(
+    new Set(document.businessObjects.map((item) => item.module).filter(Boolean))
+  ) as string[];
 
   document.flows
     .filter((item) => !selectedObject || item.from === selectedObject.id || item.to === selectedObject.id)
@@ -40,8 +59,33 @@ export function WorkbenchLayout(props: {
       <div className="workbench">
         <aside className="sidebar">
           <h2>业务对象</h2>
+          <div className="filter-stack">
+            <input
+              className="field-control"
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+              placeholder="搜索业务对象"
+              type="search"
+              value={searchQuery}
+            />
+            <label className="field-label">
+              <span>模块筛选</span>
+              <select
+                aria-label="模块筛选"
+                className="field-control"
+                onChange={(event) => onModuleFilterChange(event.target.value)}
+                value={moduleFilter}
+              >
+                <option value="all">全部模块</option>
+                {modules.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="object-list">
-            {document.businessObjects.map((item) => (
+            {filteredObjects.map((item) => (
               <button
                 className={item.id === selectedObject?.id ? "object-item active" : "object-item"}
                 key={item.id}
@@ -52,6 +96,9 @@ export function WorkbenchLayout(props: {
                 <span>{item.technicalName ?? item.id}</span>
               </button>
             ))}
+            {filteredObjects.length === 0 ? (
+              <div className="empty-state">没有匹配的业务对象。</div>
+            ) : null}
           </div>
         </aside>
         <main className="canvas">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { BizGlanceDocument } from "../../core/src/index";
 import { WorkbenchLayout } from "./components/WorkbenchLayout";
 
@@ -9,20 +9,48 @@ export default function App({ initialDocument }: { initialDocument: BizGlanceDoc
   const [selectedObjectId, setSelectedObjectId] = useState(
     initialDocument.businessObjects[0]?.id ?? ""
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [moduleFilter, setModuleFilter] = useState("all");
+
+  const filteredObjects = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return initialDocument.businessObjects.filter((item) => {
+      const matchesQuery =
+        normalizedQuery.length === 0 ||
+        item.name.toLowerCase().includes(normalizedQuery) ||
+        (item.technicalName ?? "").toLowerCase().includes(normalizedQuery);
+      const matchesModule = moduleFilter === "all" || item.module === moduleFilter;
+
+      return matchesQuery && matchesModule;
+    });
+  }, [initialDocument.businessObjects, moduleFilter, searchQuery]);
+
+  useEffect(() => {
+    if (filteredObjects.some((item) => item.id === selectedObjectId)) {
+      return;
+    }
+
+    setSelectedObjectId(filteredObjects[0]?.id ?? "");
+  }, [filteredObjects, selectedObjectId]);
 
   const selectedObject = useMemo(
-    () =>
-      initialDocument.businessObjects.find((item) => item.id === selectedObjectId) ?? null,
-    [initialDocument.businessObjects, selectedObjectId]
+    () => filteredObjects.find((item) => item.id === selectedObjectId) ?? null,
+    [filteredObjects, selectedObjectId]
   );
 
   return (
     <WorkbenchLayout
       document={initialDocument}
+      filteredObjects={filteredObjects}
       view={view}
       selectedObject={selectedObject}
+      searchQuery={searchQuery}
+      moduleFilter={moduleFilter}
       onViewChange={setView}
       onSelectObject={setSelectedObjectId}
+      onSearchQueryChange={setSearchQuery}
+      onModuleFilterChange={setModuleFilter}
     />
   );
 }

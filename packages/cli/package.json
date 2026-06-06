@@ -1,0 +1,20 @@
+{
+  "name": "@bizglance/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@bizglance/core": "workspace:*",
+    "commander": "^14.0.2"
+  },
+  "bin": {
+    "bizglance": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "commander": "^15.0.0"
+  }
+}

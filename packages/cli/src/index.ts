@@ -10,8 +10,9 @@ program
   .command("analyze")
   .requiredOption("--out <path>")
   .option("--sample <name>")
-  .option("--repo <path>")
+  .option("--repo <path-or-github-url>")
   .option("--lens <name>", "analysis lens", "java-spring")
+  .option("--codegraph-context <path>", "external CodeGraph context and LLM findings JSON")
   .action(async (options) => {
     await runAnalyzeCommand(options);
   });

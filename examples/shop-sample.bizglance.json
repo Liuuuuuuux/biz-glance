@@ -1,0 +1,206 @@
+{
+  "meta": {
+    "version": "0.1.0",
+    "generatedAt": "2026-06-06T13:35:22.218Z",
+    "source": {
+      "kind": "repo",
+      "name": "syqu22/spring-boot-shop-sample",
+      "lens": "java-spring",
+      "path": "https://github.com/syqu22/spring-boot-shop-sample.git"
+    },
+    "warnings": []
+  },
+  "businessObjects": [
+    {
+      "id": "category",
+      "name": "Category",
+      "technicalName": "Category",
+      "module": "category"
+    },
+    {
+      "id": "product",
+      "name": "Product",
+      "technicalName": "Product",
+      "module": "product"
+    },
+    {
+      "id": "user",
+      "name": "User",
+      "technicalName": "User",
+      "module": "user"
+    }
+  ],
+  "flows": [
+    {
+      "id": "repo-route-update-product-/product/edit/{id}",
+      "from": "product",
+      "to": "product",
+      "relation": "updates",
+      "label": "更新Product",
+      "sourceKind": "inferred",
+      "confidence": "medium",
+      "evidenceIds": [
+        "repo-route-update-product-/product/edit/{id}"
+      ]
+    },
+    {
+      "id": "repo-route-create-user-/register",
+      "from": "user",
+      "to": "user",
+      "relation": "creates",
+      "label": "创建User",
+      "sourceKind": "inferred",
+      "confidence": "medium",
+      "evidenceIds": [
+        "repo-route-create-user-/register"
+      ]
+    }
+  ],
+  "statusMutations": [],
+  "fieldLineages": [
+    {
+      "id": "repo-lineage-product-name",
+      "objectId": "product",
+      "targetField": "name",
+      "sourceFields": [
+        "product.name"
+      ],
+      "expression": "newProduct.getName()",
+      "sourceKind": "inferred",
+      "confidence": "medium",
+      "evidenceIds": [
+        "repo-lineage-product-name"
+      ]
+    },
+    {
+      "id": "repo-lineage-product-image-url",
+      "objectId": "product",
+      "targetField": "imageUrl",
+      "sourceFields": [
+        "product.imageUrl"
+      ],
+      "expression": "newProduct.getImageUrl()",
+      "sourceKind": "inferred",
+      "confidence": "medium",
+      "evidenceIds": [
+        "repo-lineage-product-image-url"
+      ]
+    },
+    {
+      "id": "repo-lineage-product-description",
+      "objectId": "product",
+      "targetField": "description",
+      "sourceFields": [
+        "product.description"
+      ],
+      "expression": "newProduct.getDescription()",
+      "sourceKind": "inferred",
+      "confidence": "medium",
+      "evidenceIds": [
+        "repo-lineage-product-description"
+      ]
+    },
+    {
+      "id": "repo-lineage-product-price",
+      "objectId": "product",
+      "targetField": "price",
+      "sourceFields": [
+        "product.price"
+      ],
+      "expression": "newProduct.getPrice()",
+      "sourceKind": "inferred",
+      "confidence": "medium",
+      "evidenceIds": [
+        "repo-lineage-product-price"
+      ]
+    },
+    {
+      "id": "repo-lineage-user-password",
+      "objectId": "user",
+      "targetField": "password",
+      "sourceFields": [
+        "user.password"
+      ],
+      "expression": "bCryptPasswordEncoder.encode(user.getPassword())",
+      "sourceKind": "inferred",
+      "confidence": "medium",
+      "evidenceIds": [
+        "repo-lineage-user-password"
+      ]
+    }
+  ],
+  "evidences": [
+    {
+      "id": "repo-object-category",
+      "title": "Category domain",
+      "filePath": "src/main/java/com/syqu/shop/domain/Category.java",
+      "symbol": "Category",
+      "summary": "识别到 Category 领域对象"
+    },
+    {
+      "id": "repo-object-product",
+      "title": "Product domain",
+      "filePath": "src/main/java/com/syqu/shop/domain/Product.java",
+      "symbol": "Product",
+      "summary": "识别到 Product 领域对象"
+    },
+    {
+      "id": "repo-object-user",
+      "title": "User domain",
+      "filePath": "src/main/java/com/syqu/shop/domain/User.java",
+      "symbol": "User",
+      "summary": "识别到 User 领域对象"
+    },
+    {
+      "id": "repo-lineage-product-name",
+      "title": "Product.name",
+      "filePath": "src/main/java/com/syqu/shop/service/impl/ProductServiceImpl.java",
+      "symbol": "setName",
+      "summary": "识别到 Product.name 来源于 Product.name"
+    },
+    {
+      "id": "repo-lineage-product-image-url",
+      "title": "Product.imageUrl",
+      "filePath": "src/main/java/com/syqu/shop/service/impl/ProductServiceImpl.java",
+      "symbol": "setImageUrl",
+      "summary": "识别到 Product.imageUrl 来源于 Product.imageUrl"
+    },
+    {
+      "id": "repo-lineage-product-description",
+      "title": "Product.description",
+      "filePath": "src/main/java/com/syqu/shop/service/impl/ProductServiceImpl.java",
+      "symbol": "setDescription",
+      "summary": "识别到 Product.description 来源于 Product.description"
+    },
+    {
+      "id": "repo-lineage-product-price",
+      "title": "Product.price",
+      "filePath": "src/main/java/com/syqu/shop/service/impl/ProductServiceImpl.java",
+      "symbol": "setPrice",
+      "summary": "识别到 Product.price 来源于 Product.price"
+    },
+    {
+      "id": "repo-route-update-product-/product/edit/{id}",
+      "title": "ProductController.editProduct",
+      "filePath": "src/main/java/com/syqu/shop/controller/ProductController.java",
+      "route": "/product/edit/{id}",
+      "symbol": "ProductService.edit",
+      "summary": "识别到 ProductController.editProduct 通过 ProductService.edit 更新 Product"
+    },
+    {
+      "id": "repo-lineage-user-password",
+      "title": "User.password",
+      "filePath": "src/main/java/com/syqu/shop/service/impl/UserServiceImpl.java",
+      "symbol": "setPassword",
+      "summary": "识别到 User.password 来源于 User.password"
+    },
+    {
+      "id": "repo-route-create-user-/register",
+      "title": "RegisterController.registration",
+      "filePath": "src/main/java/com/syqu/shop/controller/RegisterController.java",
+      "route": "/register",
+      "symbol": "UserService.save",
+      "summary": "识别到 RegisterController.registration 通过 UserService.save 创建 User"
+    }
+  ]
+}

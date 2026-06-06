@@ -5,3 +5,7 @@ packages/*/tmp/
 packages/*/dist/
 packages/web/public/current.bizglance.json
 .codex-runtime/
+.od-skills/
+.superpowers/
+*.artifact.json
+bizglance-business-workbench.html

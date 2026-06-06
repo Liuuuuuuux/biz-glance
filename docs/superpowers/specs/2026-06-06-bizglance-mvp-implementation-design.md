@@ -30,9 +30,9 @@
 - LLM 语义增强
 - 复杂图编辑与拖拽
 - 多技术栈 Lens
-- 直接分析 GitHub URL 作为产品能力
+- 多分支/多提交版本选择
 
-GitHub 公开仓库可以用于开发阶段参考规则和补充样本，但第一版产品输入只承诺支持本地目录。
+第一版产品输入支持本地目录和公开 GitHub 仓库 URL。GitHub URL 会在 CLI 层浅克隆到临时目录，再复用本地目录分析管线，输出仍保持同一份 `bizglance.json` 契约。
 
 ## 3. 整体架构
 
@@ -207,9 +207,9 @@ interface Evidence {
 
 ### 6.2 真实项目分析
 
-真实项目第一版只支持本地 Java/Spring 项目路径：
+真实项目第一版支持本地 Java/Spring 项目路径和公开 GitHub 仓库 URL：
 
-- 输入：`--repo <local-path>`
+- 输入：`--repo <local-path-or-github-url>`
 - Lens：`--lens java-spring`
 - 处理方式：
   - 扫描 `.java` 文件

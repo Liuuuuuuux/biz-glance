@@ -5,6 +5,36 @@ import { StatusFlowView } from "../views/StatusFlowView";
 
 type ViewName = "document" | "status" | "field";
 
+function getViewMeta(view: ViewName, document: BizGlanceDocument, selectedObject: BusinessObject | null) {
+  if (view === "status") {
+    return {
+      title: "状态从入口到持久化",
+      description: "把状态字段、触发方法和目标状态拆出来，适合测试设计状态覆盖，也方便开发定位状态写入位置。",
+      pill: "Status Flow"
+    };
+  }
+
+  if (view === "field") {
+    return {
+      title: "字段来源与计算逻辑",
+      description: "字段血缘视图关注一个值的来源、变换和目标，帮助研发交接、测试断言和业务口径对齐。",
+      pill: "Field Lineage"
+    };
+  }
+
+  const firstFlow = selectedObject
+    ? document.flows.find((item) => item.from === selectedObject.id || item.to === selectedObject.id)
+    : document.flows[0];
+  const fromName = document.businessObjects.find((item) => item.id === firstFlow?.from)?.name ?? "业务对象";
+  const toName = document.businessObjects.find((item) => item.id === firstFlow?.to)?.name ?? "下游对象";
+
+  return {
+    title: `${fromName}到${toName}`,
+    description: "把一个业务对象会生成、更新或引用哪些下游对象从调用链里提取出来，供业务和研发共同确认边界。",
+    pill: "Document Flow"
+  };
+}
+
 export function WorkbenchLayout(props: {
   document: BizGlanceDocument;
   filteredObjects: BusinessObject[];
@@ -12,10 +42,13 @@ export function WorkbenchLayout(props: {
   selectedObject: BusinessObject | null;
   searchQuery: string;
   moduleFilter: string;
+  importDialogOpen: boolean;
   onViewChange: (view: ViewName) => void;
   onSelectObject: (id: string) => void;
   onSearchQueryChange: (value: string) => void;
   onModuleFilterChange: (value: string) => void;
+  onOpenImportDialog: () => void;
+  onCloseImportDialog: () => void;
 }) {
   const {
     document,
@@ -24,15 +57,19 @@ export function WorkbenchLayout(props: {
     selectedObject,
     searchQuery,
     moduleFilter,
+    importDialogOpen,
     onViewChange,
     onSelectObject,
     onSearchQueryChange,
-    onModuleFilterChange
+    onModuleFilterChange,
+    onOpenImportDialog,
+    onCloseImportDialog
   } = props;
   const evidenceIds = new Set<string>();
   const modules = Array.from(
     new Set(document.businessObjects.map((item) => item.module).filter(Boolean))
   ) as string[];
+  const viewMeta = getViewMeta(view, document, selectedObject);
 
   document.flows
     .filter((item) => !selectedObject || item.from === selectedObject.id || item.to === selectedObject.id)
@@ -51,9 +88,14 @@ export function WorkbenchLayout(props: {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">BizGlance</p>
-          <h1>业务分析工作台</h1>
+        <div className="topbar-inner">
+          <div>
+            <p className="eyebrow">BizGlance</p>
+            <h1>业务分析工作台</h1>
+          </div>
+          <button className="topbar-action" onClick={onOpenImportDialog} type="button">
+            导入项目
+          </button>
         </div>
       </header>
       <div className="workbench">
@@ -128,6 +170,13 @@ export function WorkbenchLayout(props: {
               字段血缘
             </button>
           </div>
+          <div className="view-head">
+            <div>
+              <h2>{viewMeta.title}</h2>
+              <p>{viewMeta.description}</p>
+            </div>
+            <span className="view-pill">{viewMeta.pill}</span>
+          </div>
           {view === "document" && (
             <DocumentFlowView document={document} selectedObject={selectedObject} />
           )}
@@ -145,6 +194,13 @@ export function WorkbenchLayout(props: {
                 <div className="evidence-card" key={item.id}>
                   <strong>{item.title}</strong>
                   <p>{item.summary}</p>
+                  {item.filePath ? <span className="evidence-meta">{item.filePath}</span> : null}
+                  {item.route ? <span className="evidence-meta">Route: {item.route}</span> : null}
+                  {item.lines ? (
+                    <span className="evidence-meta">
+                      Lines: {item.lines.start}-{item.lines.end}
+                    </span>
+                  ) : null}
                   {item.symbol ? <span>{item.symbol}</span> : null}
                 </div>
               ))}
@@ -152,6 +208,29 @@ export function WorkbenchLayout(props: {
           )}
         </aside>
       </div>
+      {importDialogOpen ? (
+        <div className="dialog-backdrop" onClick={onCloseImportDialog}>
+          <div
+            aria-labelledby="import-dialog-title"
+            className="dialog"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="dialog-head">
+              <div>
+                <h2 id="import-dialog-title">导入项目</h2>
+                <p>填写代码库路径和分析范围，BizGlance 会生成业务图谱数据。</p>
+              </div>
+              <button className="dialog-close" onClick={onCloseImportDialog} type="button">
+                关闭
+              </button>
+            </div>
+            <div className="dialog-body">
+              <p>当前版本请先通过 CLI 运行 `bizglance analyze` 生成数据文件，再用 `bizglance serve` 打开预览。</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

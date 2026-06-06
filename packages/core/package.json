@@ -2,9 +2,6 @@
   "name": "@bizglance/core",
   "version": "0.1.0",
   "type": "module",
-  "dependencies": {
-    "fast-glob": "^3.3.3"
-  },
   "exports": {
     ".": "./src/index.ts"
   },

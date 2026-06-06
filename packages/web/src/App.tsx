@@ -9,6 +9,7 @@ export default function App({ initialDocument }: { initialDocument: BizGlanceDoc
   const [selectedObjectId, setSelectedObjectId] = useState(
     initialDocument.businessObjects[0]?.id ?? ""
   );
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [moduleFilter, setModuleFilter] = useState("all");
 
@@ -47,10 +48,13 @@ export default function App({ initialDocument }: { initialDocument: BizGlanceDoc
       selectedObject={selectedObject}
       searchQuery={searchQuery}
       moduleFilter={moduleFilter}
+      importDialogOpen={importDialogOpen}
       onViewChange={setView}
       onSelectObject={setSelectedObjectId}
       onSearchQueryChange={setSearchQuery}
       onModuleFilterChange={setModuleFilter}
+      onOpenImportDialog={() => setImportDialogOpen(true)}
+      onCloseImportDialog={() => setImportDialogOpen(false)}
     />
   );
 }

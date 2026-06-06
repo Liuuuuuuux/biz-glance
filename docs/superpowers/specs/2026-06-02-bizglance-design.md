@@ -1,12 +1,12 @@
 # BizGlance 设计文档
 
-> 从 Java/Spring Boot 代码自动提取业务流程知识图谱，简洁展示单据流转、状态流转、字段流转。
+> 从代码库自动提取业务视角知识图谱，简洁展示业务对象、操作入口、状态变更和字段流转。
 
 ## 1. 项目定位
 
 ### 一句话描述
 
-从 Java/Spring Boot 代码自动提取业务流程知识图谱，简洁展示单据流转、状态流转、字段流转。
+从各种项目代码中自动提取业务视角知识图谱，简洁展示业务对象、操作入口、状态变更和字段流转。第一版先聚焦 Java/Spring Boot 项目，用一条真实样本链路验证可行性。
 
 ### 目标用户
 
@@ -16,7 +16,7 @@
 
 ### 核心价值
 
-不像传统代码图谱那样展示"蜘蛛网"，而是专注于业务视角，用简洁的三层视图展示单据上下游、状态流转、字段血缘。
+不像传统代码图谱那样展示"蜘蛛网"，而是专注于业务视角，用简洁的三层视图展示业务对象关系、状态流转、字段血缘。ERP/RuoYi 是第一阶段验证样本，不是长期边界。
 
 ## 2. 核心功能
 
@@ -49,11 +49,21 @@
 │         └──────────────────┼──────────────────┘             │
 │                            ▼                                │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │                    分析引擎                          │   │
-│  ├─────────────────────────────────────────────────────┤   │
-│  │  Java Parser  →  AST 分析  →  业务逻辑提取           │   │
-│  │       ↓              ↓              ↓               │   │
-│  │  实体识别      调用关系分析     状态/字段识别         │   │
+│  │                Source Graph Provider                 │   │
+│  │  codegraph CLI/MCP/SDK → 符号、路由、调用、文件索引   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                            │                                │
+│                            ▼                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                    BizGlance Core                    │   │
+│  │  统一中间模型 → 证据归一化 → 业务图谱输出             │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                            │                                │
+│                            ▼                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                    Domain Lens                       │   │
+│  │  Java/Spring Lens → Controller/Service/Entity/Mapper │   │
+│  │  未来扩展: Django/Rails/Node/移动端/数据项目          │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 │                            ▼                                │
@@ -76,48 +86,45 @@
 | 层级 | 技术选型 |
 |------|----------|
 | **语言** | TypeScript |
-| **Java 解析** | tree-sitter-java（跨平台、性能好） |
+| **源码结构提供者** | codegraph（MVP 先本地 CLI 调用，后续可切换 SDK 或自研解析） |
+| **第一版领域 Lens** | Java/Spring Lens（Controller、Service、Entity/Domain、Mapper） |
 | **Web 框架** | React + Vite |
 | **图可视化** | AntV G6（简洁风格，支持自定义布局） |
-| **存储** | SQLite (better-sqlite3) |
+| **存储** | MVP 先导出 JSON；后续使用 SQLite (better-sqlite3) |
 | **MCP** | @modelcontextprotocol/sdk |
 | **LLM** | 可配置后端（OpenAI / Ollama / ...） |
 
 ## 4. 分析引擎核心逻辑
 
-### 第一阶段：静态分析（确定性）
+### MVP 阶段：Provider + Lens（确定性）
 
 ```
-Java 源码
+目标代码库
     │
     ▼
 ┌──────────────────┐
-│  AST 解析        │  → 识别类、方法、字段、注解
+│  codegraph 索引  │  → 识别文件、符号、路由、调用关系
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  实体识别        │  → 识别 @Entity、DTO、VO
-│                  │  → 提取字段名、类型、注解
+│  Core 归一化     │  → SourceFile、CodeSymbol、Route、CallEdge
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  Service 分析    │  → 识别 Service 层方法
-│                  │  → 提取方法调用关系
-│                  │  → 识别状态变更逻辑（setStatus）
+│ Java/Spring Lens │  → Controller、Service、Domain、Mapper
+│                  │  → 接口到实现、Service 到 Mapper
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  Controller 分析 │  → 识别 API 入口
-│                  │  → 关联到 Service 方法
+│  业务证据提取    │  → 操作入口、状态字段、状态变更、持久化边
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  流转关系提取    │  → A.method() 调用 B.method()
-│                  │  → 识别上下游单据关系
+│  图谱输出        │  → bizglance.json
 └────────┬─────────┘
 ```
 
@@ -125,8 +132,8 @@ Java 源码
 
 | 识别目标 | 识别方式 |
 |----------|----------|
-| **状态字段** | 字段名含 `status`/`state`，枚举类型 |
-| **状态变更** | `setStatus()` 调用，状态机注解 |
+| **状态字段** | 字段名含 `status`/`state`，枚举类型，或框架约定字段 |
+| **状态变更** | `setStatus()`、`updateStatus()`、`changeStatus()`、`LambdaUpdateWrapper.set(...)` |
 | **字段计算** | 赋值表达式分析，识别 `a = b * c` |
 | **上下游关系** | Service 方法参数/返回值类型推断 |
 
@@ -152,6 +159,26 @@ Java 源码
 ### 核心实体
 
 ```typescript
+// 源码结构提供者输出的统一符号
+interface CodeSymbol {
+  id: string;
+  name: string;
+  kind: 'file' | 'class' | 'interface' | 'method' | 'field' | 'route';
+  qualifiedName: string;
+  filePath: string;
+  startLine: number;
+  endLine: number;
+}
+
+// 操作入口
+interface Operation {
+  id: string;
+  route?: string;         // PUT /system/user/changeStatus
+  method: string;         // changeStatus
+  sourceSymbolId: string;
+  businessAction?: 'create' | 'read' | 'update' | 'delete' | 'status_change' | 'other';
+}
+
 // 单据/实体
 interface Document {
   id: string;
@@ -191,6 +218,16 @@ interface StatusTransition {
   description?: string;
 }
 
+// MVP 状态变更证据
+interface StatusMutation {
+  id: string;
+  operationId: string;
+  documentId: string;
+  field: string;          // status
+  valueSource: string;    // request body、method param、constant、expression
+  evidence: CodeSymbol[]; // Controller → Service → Mapper 的代码证据
+}
+
 // 单据流转（上下游关系）
 interface DocumentFlow {
   id: string;
@@ -219,6 +256,9 @@ bizglance init
 
 # 分析代码库
 bizglance analyze [path]
+
+# MVP：使用 codegraph + Java/Spring Lens 导出业务图谱 JSON
+bizglance analyze [path] --provider codegraph --lens java-spring --out bizglance.json
 
 # 启动 Web 服务（浏览器查看）
 bizglance serve
@@ -341,14 +381,13 @@ bizglance/
 ├── packages/
 │   ├── core/                    # 核心分析引擎
 │   │   ├── src/
-│   │   │   ├── parser/          # Java AST 解析
-│   │   │   ├── analyzer/        # 业务逻辑分析
-│   │   │   │   ├── entity.ts    # 实体识别
-│   │   │   │   ├── service.ts   # Service 分析
-│   │   │   │   ├── status.ts    # 状态识别
-│   │   │   │   └── flow.ts      # 流转关系提取
+│   │   │   ├── providers/       # Source Graph Provider 适配层
+│   │   │   │   └── codegraph.ts # MVP: 本地 codegraph CLI 调用
+│   │   │   ├── lenses/          # 技术栈/领域 Lens
+│   │   │   │   └── java-spring/ # Controller/Service/Domain/Mapper 规则
+│   │   │   ├── graph/           # 统一中间模型和图谱输出
 │   │   │   ├── llm/             # LLM 语义增强
-│   │   │   └── store/           # SQLite 存储
+│   │   │   └── store/           # JSON/SQLite 存储
 │   │   └── package.json
 │   │
 │   ├── cli/                     # CLI 入口
@@ -376,31 +415,40 @@ bizglance/
 
 ## 10. 实现阶段
 
-### Phase 1: MVP（核心分析 + 单据流转视图）
+### Phase 0: 最小 MVP（codegraph + Java/Spring Lens + JSON）
 
 | 功能 | 说明 |
 |------|------|
-| Java AST 解析 | 使用 tree-sitter-java |
-| 实体识别 | 识别 @Entity 类和字段 |
-| Service 分析 | 提取方法调用关系 |
-| 单据流转视图 | 基础上下游关系展示 |
+| codegraph Provider | 调用本地 `codegraph`，读取文件、符号、路由、调用关系 |
+| Java/Spring Lens | 识别 Controller、Service 接口/实现、Domain/BO/VO、Mapper |
+| 样本链路 | 先跑通 RuoYi-Vue-Plus 的 `changeStatus` 类状态变更链路 |
+| 状态变更提取 | 识别 `changeStatus`、`updateStatus`、`LambdaUpdateWrapper.set(...status...)` |
+| JSON 输出 | 生成 `bizglance.json`，包含业务对象、操作入口、状态变更和代码证据 |
+
+### Phase 1: Web 预览 + 单据/业务对象流转
+
+| 功能 | 说明 |
+|------|------|
 | CLI 基础命令 | init, analyze, serve |
+| 单据/业务对象识别 | 从 Domain/BO/VO/DTO 和路由上下文归并业务对象 |
+| 单据流转视图 | 基础上下游关系展示 |
 | SQLite 存储 | 持久化分析结果 |
 
 ### Phase 2: 状态流转 + 字段流转
 
 | 功能 | 说明 |
 |------|------|
-| 状态字段识别 | 识别 status/state 字段 |
-| 状态变更提取 | 分析 setStatus 调用 |
+| 状态字段识别 | 扩展 status/state、枚举、框架约定字段 |
+| 状态变更提取 | 扩展 setStatus、条件分支、状态机注解和框架 API |
 | 字段计算分析 | 提取赋值表达式 |
 | 状态流转视图 | 状态机可视化 |
 | 字段流转视图 | 字段来源展示 |
 
-### Phase 3: LLM 增强 + MCP
+### Phase 3: 多 Lens + LLM 增强 + MCP
 
 | 功能 | 说明 |
 |------|------|
+| 多技术栈 Lens | 增加 Django、Rails、Node、移动端、数据项目等 Lens |
 | LLM 集成 | 可配置后端 |
 | 业务语义标注 | 单据类型、状态含义 |
 | MCP 服务器 | 供 AI 助手调用 |

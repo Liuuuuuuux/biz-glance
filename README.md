@@ -8,6 +8,14 @@ pnpm --filter @bizglance/cli dev analyze --sample education --out .\dist\educati
 pnpm --filter @bizglance/cli dev serve --data .\dist\education.bizglance.json
 ```
 
+## 本地冒烟验收
+
+```powershell
+pnpm smoke
+```
+
+该命令会分析 `fixtures/java-spring-mini`，生成 `dist/smoke.bizglance.json`，并校验 `PurchaseOrder`、`ReceiptOrder`、创建关系、状态变更、字段血缘和代码证据是否完整。
+
 ## 本地 Java/Spring 演示
 
 ```powershell

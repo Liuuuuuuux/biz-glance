@@ -6,7 +6,8 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "build": "pnpm --filter @bizglance/web build"
+    "build": "pnpm --filter @bizglance/web build",
+    "smoke": "pnpm --filter @bizglance/cli dev smoke"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",

@@ -105,19 +105,74 @@ describe("cli workflow command", () => {
     );
   });
 
-  it("requires explicit context in full mode", async () => {
-    await expect(
-      runWorkflowCommand({
+  it("generates an intermediate context when context and cache are omitted", async () => {
+    const calls: string[] = [];
+    let analyzeContextPath: string | undefined;
+
+    await runWorkflowCommand({
+      repo: "E:/code/biz-glance",
+      noServe: true,
+      initCommand: async () => ({
         repo: "E:/code/biz-glance",
-        full: true,
-        noServe: true,
-        initCommand: async () => ({
-          repo: "E:/code/biz-glance",
-          workspaceDir: "E:/code/biz-glance/.bizglance",
-          createdConfig: true
-        })
-      })
-    ).rejects.toThrow("full 模式必须提供 --context。");
+        workspaceDir: "E:/code/biz-glance/.bizglance",
+        createdConfig: true
+      }),
+      fileExists: async () => false,
+      generateContext: async (options) => {
+        calls.push("generate");
+        expect(options.repo.replace(/\\/g, "/")).toBe("E:/code/biz-glance");
+        expect(options.intermediateDir.replace(/\\/g, "/")).toBe(
+          "E:/code/biz-glance/.bizglance/intermediate"
+        );
+        return "E:/code/biz-glance/.bizglance/intermediate/codegraph-assisted-input.json";
+      },
+      analyzeCommand: async (options) => {
+        calls.push("analyze");
+        analyzeContextPath = options.codegraphContext;
+      },
+      validateCommand: async () => {
+        calls.push("validate");
+        return { kind: "document", valid: true, errors: [], warnings: [] };
+      }
+    });
+
+    expect(calls).toEqual(["generate", "analyze", "validate"]);
+    expect(analyzeContextPath?.replace(/\\/g, "/")).toBe(
+      "E:/code/biz-glance/.bizglance/intermediate/codegraph-assisted-input.json"
+    );
+  });
+
+  it("regenerates context in full mode when explicit context is omitted", async () => {
+    const calls: string[] = [];
+
+    await runWorkflowCommand({
+      repo: "E:/code/biz-glance",
+      full: true,
+      noServe: true,
+      initCommand: async () => ({
+        repo: "E:/code/biz-glance",
+        workspaceDir: "E:/code/biz-glance/.bizglance",
+        createdConfig: true
+      }),
+      fileExists: async () => true,
+      generateContext: async () => {
+        calls.push("generate");
+        return "E:/code/biz-glance/.bizglance/intermediate/codegraph-assisted-input.json";
+      },
+      analyzeCommand: async (options) => {
+        calls.push(`analyze:${options.codegraphContext}`);
+      },
+      validateCommand: async () => {
+        calls.push("validate");
+        return { kind: "document", valid: true, errors: [], warnings: [] };
+      }
+    });
+
+    expect(calls).toEqual([
+      "generate",
+      "analyze:E:/code/biz-glance/.bizglance/intermediate/codegraph-assisted-input.json",
+      "validate"
+    ]);
   });
 
   it("skips analyze and validates existing output in review mode", async () => {

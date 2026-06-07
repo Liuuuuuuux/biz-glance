@@ -11,7 +11,7 @@ Use this skill to provide a single agent entry equivalent to:
 /bizglance [path] [--full] [--review] [--language zh] [--no-serve]
 ```
 
-Keep orchestration in the agent and execution in the CLI. Do not build an AST fallback in the first phase; require CodeGraph context or stop with a clear message.
+Keep orchestration in the agent and execution in the CLI. Use deterministic scripts for cheap repository facts, then use specialized LLM agents for business findings. Do not build a full AST engine in the first phase.
 
 When the local CLI is available, prefer the thin orchestration command:
 
@@ -19,11 +19,11 @@ When the local CLI is available, prefer the thin orchestration command:
 bizglance workflow <repo> [--context <codegraph-assisted-input.json>] [--full] [--review] [--language zh] [--no-serve]
 ```
 
-This command should internally chain `bizglance init`, `bizglance analyze`, `bizglance validate`, and optional `bizglance serve`.
+This command should internally chain `bizglance init`, deterministic preprocessing, findings merge, `bizglance analyze`, `bizglance validate`, and optional `bizglance serve`.
 
 Workflow parameter intent:
 
-- `--full`: ignore cached `.bizglance/intermediate/codegraph-assisted-input.json` and require explicit `--context`.
+- `--full`: ignore cached `.bizglance/intermediate/codegraph-assisted-input.json`; use explicit `--context` when supplied, otherwise regenerate deterministic context and merged findings.
 - `--review`: skip re-analysis and only validate or preview existing `.bizglance/bizglance.json`.
 - `--language <language>`: persist the preferred output language into `.bizglance/config.json`.
 
@@ -35,15 +35,32 @@ Workflow parameter intent:
 4. Capture the current git commit when available and write it into `.bizglance/meta.json` if the implementation supports it.
 5. If the path does not exist, stop and report the failing path.
 
-## Phase 1: CodeGraph Context
+## Phase 1: Deterministic Repository Facts
 
-1. Ask CodeGraph for business-relevant structure facts: routes, controllers, services, entities, methods, fields, and key call paths.
-2. Save the raw context as `.bizglance/intermediate/codegraph-context.json`.
-3. If CodeGraph is unavailable, stop and explain that the user must initialize CodeGraph or provide an existing context file.
+1. Run `skills/bizglance/scripts/collect-repo-context.mjs` to collect README summary, manifests, entrypoints, entity candidates, status candidates, and field candidates.
+2. Save the output as `.bizglance/intermediate/repo-context.json`.
+3. Ask CodeGraph for richer business-relevant structure facts when available: routes, controllers, services, entities, methods, fields, and key call paths.
+4. Save CodeGraph facts as `.bizglance/intermediate/codegraph-context.json`. If CodeGraph is unavailable, keep the deterministic facts and continue with lower-confidence findings.
 
 ## Phase 2: LLM Business Findings
 
-Generate only JSON and save it as `.bizglance/intermediate/llm-findings.json`.
+Use specialized agents instead of one large prompt:
+
+- `business-object-agent`
+- `business-flow-agent`
+- `status-mutation-agent`
+- `field-lineage-agent`
+
+Each agent must generate only JSON and save its own findings file:
+
+```text
+.bizglance/intermediate/business-object-findings.json
+.bizglance/intermediate/business-flow-findings.json
+.bizglance/intermediate/status-mutation-findings.json
+.bizglance/intermediate/field-lineage-findings.json
+```
+
+Legacy or debug runs may still use `.bizglance/intermediate/llm-findings.json` when manually assembling context.
 
 Required shape:
 
@@ -66,7 +83,7 @@ Rules:
 
 ## Phase 3: Assemble
 
-Merge `codegraph-context.json` and `llm-findings.json` into:
+Run `skills/bizglance/scripts/merge-business-findings.mjs` to merge `codegraph-context.json` and the four agent findings files into:
 
 ```text
 .bizglance/intermediate/codegraph-assisted-input.json
@@ -78,7 +95,16 @@ Then run:
 bizglance analyze <repo> --context .bizglance/intermediate/codegraph-assisted-input.json --out .bizglance/bizglance.json
 ```
 
-Use `--full` to ignore cached intermediate files. Use `--review` to reuse existing CodeGraph context and regenerate or revalidate business findings.
+Use `--full` to ignore cached intermediate files. Use `--review` to reuse existing BizGlance output and revalidate or preview it.
+
+## Phase 3.5: Review
+
+When `--review` is requested or when findings are high impact, run:
+
+- `evidence-reviewer`
+- `business-graph-reviewer`
+
+Reviewer output should be warnings, downgrades, removals, and normalizations. Reviewers must not add new business conclusions.
 
 ## Phase 4: Validate
 

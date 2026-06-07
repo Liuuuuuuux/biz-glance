@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, rm } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runAnalyzeCommand } from "../src/commands/analyze";
@@ -83,5 +83,45 @@ describe("cli workflow", () => {
     expect(document.businessObjects.map((item) => item.technicalName)).toEqual(
       expect.arrayContaining(["Product", "Category"])
     );
+  });
+
+  it("runs the real workflow command without a manual context", async () => {
+    const repo = resolve(tmpRoot, "workflow-generated-context");
+
+    await resetDir(repo);
+    await writeFile(resolve(repo, "README.md"), "# Billing API\n\nHandles invoices.\n", "utf8");
+    await mkdir(resolve(repo, "src"), { recursive: true });
+    await writeFile(
+      resolve(repo, "src/Invoice.ts"),
+      [
+        "export interface Invoice {",
+        "  id: string;",
+        "  status: 'draft' | 'issued';",
+        "  totalAmount: number;",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await runWorkflowCommand({
+      repo,
+      noServe: true
+    });
+
+    const document = JSON.parse(await readFile(result.outputPath, "utf8")) as {
+      businessObjects: Array<{ technicalName?: string }>;
+    };
+    const generatedInput = JSON.parse(
+      await readFile(resolve(repo, ".bizglance/intermediate/codegraph-assisted-input.json"), "utf8")
+    ) as {
+      findings: {
+        businessObjects: Array<{ technicalName: string }>;
+      };
+    };
+
+    expect(generatedInput.findings.businessObjects).toEqual([
+      expect.objectContaining({ technicalName: "Invoice" })
+    ]);
+    expect(document.businessObjects.map((item) => item.technicalName)).toContain("Invoice");
   });
 });

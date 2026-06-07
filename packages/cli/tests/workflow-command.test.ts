@@ -142,6 +142,75 @@ describe("cli workflow command", () => {
     );
   });
 
+  it("runs findings review before analyze when generated context is needed", async () => {
+    const calls: string[] = [];
+
+    await runWorkflowCommand({
+      repo: "E:/code/biz-glance",
+      noServe: true,
+      initCommand: async () => ({
+        repo: "E:/code/biz-glance",
+        workspaceDir: "E:/code/biz-glance/.bizglance",
+        createdConfig: true
+      }),
+      fileExists: async () => false,
+      generateContext: async () => {
+        calls.push("generate");
+        return "E:/code/biz-glance/.bizglance/intermediate/codegraph-assisted-input.json";
+      },
+      reviewFindings: async (options) => {
+        calls.push(`review:${options.intermediateDir.replace(/\\/g, "/")}`);
+        return {
+          warnings: [
+            { code: "missing-evidence", severity: "warning", target: "flows[0]", message: "缺少 evidence。" }
+          ],
+          downgrades: [],
+          removals: [],
+          normalizations: []
+        };
+      },
+      analyzeCommand: async (options) => {
+        calls.push("analyze");
+        expect(options.transformDocument).toBeTypeOf("function");
+
+        const transformed = await options.transformDocument?.({
+          meta: {
+            version: "0.1.0",
+            generatedAt: "2026-06-07T00:00:00.000Z",
+            source: {
+              kind: "repo",
+              name: "biz-glance",
+              lens: "codegraph-assisted",
+              path: "E:/code/biz-glance"
+            },
+            warnings: ["existing-warning"]
+          },
+          businessObjects: [],
+          flows: [],
+          statusMutations: [],
+          fieldLineages: [],
+          evidences: []
+        });
+
+        expect(transformed?.meta.warnings).toEqual([
+          "existing-warning",
+          "missing-evidence: 缺少 evidence。"
+        ]);
+      },
+      validateCommand: async () => {
+        calls.push("validate");
+        return { kind: "document", valid: true, errors: [], warnings: [] };
+      }
+    });
+
+    expect(calls).toEqual([
+      "generate",
+      "review:E:/code/biz-glance/.bizglance/intermediate",
+      "analyze",
+      "validate"
+    ]);
+  });
+
   it("regenerates context in full mode when explicit context is omitted", async () => {
     const calls: string[] = [];
 
@@ -238,5 +307,38 @@ describe("cli workflow command", () => {
       autoServe: true,
       defaultLens: "codegraph-assisted"
     });
+  });
+
+  it("does not run findings review for manual context mode", async () => {
+    const calls: string[] = [];
+
+    await runWorkflowCommand({
+      repo: "E:/code/biz-glance",
+      codegraphContext: "E:/code/biz-glance/fixtures/codegraph/shop-context.json",
+      noServe: true,
+      initCommand: async () => ({
+        repo: "E:/code/biz-glance",
+        workspaceDir: "E:/code/biz-glance/.bizglance",
+        createdConfig: true
+      }),
+      reviewFindings: async () => {
+        calls.push("review");
+        return {
+          warnings: [],
+          downgrades: [],
+          removals: [],
+          normalizations: []
+        };
+      },
+      analyzeCommand: async () => {
+        calls.push("analyze");
+      },
+      validateCommand: async () => {
+        calls.push("validate");
+        return { kind: "document", valid: true, errors: [], warnings: [] };
+      }
+    });
+
+    expect(calls).toEqual(["analyze", "validate"]);
   });
 });

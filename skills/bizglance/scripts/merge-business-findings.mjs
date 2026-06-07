@@ -32,6 +32,15 @@ function asArray(value, key) {
   return [];
 }
 
+async function readReviewWarnings(intermediateDir) {
+  return await readJsonIfExists(resolve(intermediateDir, "review-warnings.json"), {
+    warnings: [],
+    downgrades: [],
+    removals: [],
+    normalizations: []
+  });
+}
+
 function uniqueBy(items, keyFn) {
   const seen = new Set();
   const result = [];
@@ -47,6 +56,27 @@ function uniqueBy(items, keyFn) {
   }
 
   return result;
+}
+
+function applyDowngrades(findings, review) {
+  for (const downgrade of review.downgrades ?? []) {
+    const match = /^(flows|statusMutations|fieldLineages)\[(\d+)\]$/.exec(downgrade.target);
+    if (!match) {
+      continue;
+    }
+
+    const [, collectionName, indexText] = match;
+    const index = Number(indexText);
+    const collection = findings[collectionName];
+    if (Array.isArray(collection) && collection[index]) {
+      collection[index] = {
+        ...collection[index],
+        confidence: downgrade.confidence
+      };
+    }
+  }
+
+  return findings;
 }
 
 export async function mergeBusinessFindings(options) {
@@ -76,10 +106,12 @@ export async function mergeBusinessFindings(options) {
       (item) => `${item?.object ?? ""}:${item?.targetField ?? ""}:${(item?.sourceFields ?? []).join(",")}`
     )
   };
+  const review = await readReviewWarnings(intermediateDir);
 
   const merged = {
     codegraph,
-    findings
+    findings: applyDowngrades(findings, review),
+    review
   };
 
   await mkdir(dirname(output), { recursive: true });

@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { BizGlanceDocument } from "../../core/src/index";
 import { runAnalyzeCommand } from "../src/commands/analyze";
-import { parseGitHubRepository, prepareRepositoryInput } from "../src/utils/repoInput";
+import { prepareRepositoryInput } from "../src/utils/repoInput";
 
 const output = resolve("E:/code/biz-glance/tmp/sample-output.json");
 
@@ -35,10 +35,10 @@ describe("cli analyze", () => {
     await expect(
       runAnalyzeCommand({
         sample: "education",
-        repo: "E:/code/biz-glance/fixtures/java-spring-mini",
+        repo: "E:/code/biz-glance",
         out: "tmp/out.json"
       })
-    ).rejects.toThrow("必须且只能提供 --sample 或 --repo 其中一个参数。");
+    ).rejects.toThrow("必须且只能提供 --sample 或仓库路径其中一个参数。");
   });
 
   it("resolves relative output paths from INIT_CWD", async () => {
@@ -63,7 +63,70 @@ describe("cli analyze", () => {
     }
   });
 
-  it("resolves relative repo paths from INIT_CWD", async () => {
+  it("uses a default output path and accepts the short context option", async () => {
+    const previousInitCwd = process.env.INIT_CWD;
+    const writer = createMemoryWriter();
+
+    process.env.INIT_CWD = "E:/code/biz-glance";
+
+    try {
+      await runAnalyzeCommand({
+        repo: ".",
+        context: "fixtures/codegraph/shop-context.json",
+        writeDocument: writer.writeDocument,
+        readTextFile: async (filePath) => {
+          expect(filePath.replace(/\\/g, "/")).toBe(
+            "E:/code/biz-glance/fixtures/codegraph/shop-context.json"
+          );
+
+          return JSON.stringify({
+            codegraph: { nodes: [], edges: [], codeBlocks: [], relatedFiles: [] },
+            findings: {
+              businessObjects: [{ technicalName: "Product", name: "商品" }],
+              flows: [],
+              statusMutations: [],
+              fieldLineages: []
+            }
+          });
+        }
+      });
+
+      expect(writer.writes[0].filePath).toBe("E:\\code\\biz-glance\\dist\\bizglance.json");
+      expect(writer.writes[0].document.meta.source.lens).toBe("codegraph-assisted");
+    } finally {
+      process.env.INIT_CWD = previousInitCwd;
+    }
+  });
+
+  it("defaults repository analysis to the current workspace when only context is provided", async () => {
+    const previousInitCwd = process.env.INIT_CWD;
+    const writer = createMemoryWriter();
+
+    process.env.INIT_CWD = "E:/code/biz-glance";
+
+    try {
+      await runAnalyzeCommand({
+        context: "fixtures/codegraph/shop-context.json",
+        writeDocument: writer.writeDocument,
+        readTextFile: async () =>
+          JSON.stringify({
+            codegraph: { nodes: [], edges: [], codeBlocks: [], relatedFiles: [] },
+            findings: {
+              businessObjects: [{ technicalName: "Product", name: "商品" }],
+              flows: [],
+              statusMutations: [],
+              fieldLineages: []
+            }
+          })
+      });
+
+      expect(writer.writes[0].document.meta.source.path).toBe("E:\\code\\biz-glance");
+    } finally {
+      process.env.INIT_CWD = previousInitCwd;
+    }
+  });
+
+  it("resolves relative CodeGraph context paths from INIT_CWD", async () => {
     const previousInitCwd = process.env.INIT_CWD;
     const outputPath = resolve("E:/code/biz-glance/tmp/repo-output.json");
     const writer = createMemoryWriter();
@@ -72,63 +135,44 @@ describe("cli analyze", () => {
 
     try {
       await runAnalyzeCommand({
-        repo: "./fixtures/java-spring-mini",
+        repo: ".",
+        codegraphContext: "fixtures/codegraph/shop-context.json",
         out: outputPath,
-        writeDocument: writer.writeDocument
+        writeDocument: writer.writeDocument,
+        readTextFile: async (filePath) => {
+          expect(filePath.replace(/\\/g, "/")).toBe(
+            "E:/code/biz-glance/fixtures/codegraph/shop-context.json"
+          );
+
+          return JSON.stringify({
+            codegraph: { nodes: [], edges: [], codeBlocks: [], relatedFiles: [] },
+            findings: {
+              businessObjects: [{ technicalName: "Product", name: "商品" }],
+              flows: [],
+              statusMutations: [],
+              fieldLineages: []
+            }
+          });
+        }
       });
 
       const document = writer.writes[0].document;
       expect(writer.writes[0].filePath).toBe(outputPath);
-      expect(document.businessObjects.length).toBeGreaterThan(0);
+      expect(document.meta.source.lens).toBe("codegraph-assisted");
+      expect(document.businessObjects[0].technicalName).toBe("Product");
     } finally {
       process.env.INIT_CWD = previousInitCwd;
     }
   });
 
-  it("parses common GitHub repository URL forms", () => {
-    expect(parseGitHubRepository("https://github.com/example/java-spring-mini")?.cloneUrl).toBe(
-      "https://github.com/example/java-spring-mini.git"
-    );
-    expect(parseGitHubRepository("git@github.com:example/java-spring-mini.git")?.displayName).toBe(
-      "example/java-spring-mini"
-    );
-    expect(parseGitHubRepository("./fixtures/java-spring-mini")).toBeNull();
-  });
+  it("rejects remote repository URLs", async () => {
+    await expect(
+      prepareRepositoryInput("https://github.com/example/shop", (value) => value)
+    ).rejects.toThrow("只支持本地仓库路径");
 
-  it("analyzes a GitHub repository URL through the repo pipeline", async () => {
-    const outputPath = resolve("E:/code/biz-glance/tmp/github-output.json");
-    const writer = createMemoryWriter();
-    let cleanupCalled = false;
-
-    await runAnalyzeCommand({
-      repo: "https://github.com/example/java-spring-mini",
-      out: outputPath,
-      writeDocument: writer.writeDocument,
-      prepareRepositoryInput: async (repo) => {
-        expect(repo).toBe("https://github.com/example/java-spring-mini");
-
-        return {
-          root: "E:/code/biz-glance/fixtures/java-spring-mini",
-          displayName: "example/java-spring-mini",
-          sourcePath: "https://github.com/example/java-spring-mini.git",
-          isRemote: true,
-          cleanup: async () => {
-            cleanupCalled = true;
-          },
-          normalizeEvidencePath: (filePath) =>
-            filePath.replace("E:/code/biz-glance/fixtures/java-spring-mini/", "")
-        };
-      }
-    });
-
-    const document = writer.writes[0].document;
-
-    expect(cleanupCalled).toBe(true);
-    expect(document.meta.source.kind).toBe("repo");
-    expect(document.meta.source.name).toBe("example/java-spring-mini");
-    expect(document.meta.source.path).toBe("https://github.com/example/java-spring-mini.git");
-    expect(document.businessObjects.some((item) => item.technicalName === "PurchaseOrder")).toBe(true);
-    expect(document.evidences.some((item) => item.filePath?.startsWith("src/"))).toBe(true);
+    await expect(
+      prepareRepositoryInput("git@github.com:example/shop.git", (value) => value)
+    ).rejects.toThrow("只支持本地仓库路径");
   });
 
   it("analyzes a repository with external CodeGraph and LLM context", async () => {
@@ -136,7 +180,7 @@ describe("cli analyze", () => {
     const writer = createMemoryWriter();
 
     await runAnalyzeCommand({
-      repo: "https://github.com/example/shop",
+      repo: ".",
       lens: "codegraph-assisted",
       codegraphContext: "E:/code/biz-glance/fixtures/codegraph/shop-context.json",
       out: outputPath,
@@ -191,20 +235,18 @@ describe("cli analyze", () => {
         });
       },
       prepareRepositoryInput: async () => ({
-        root: "E:/code/biz-glance/tmp/shop",
-        displayName: "example/shop",
-        sourcePath: "https://github.com/example/shop.git",
-        isRemote: true,
-        cleanup: async () => {},
-        normalizeEvidencePath: (filePath) => filePath
+        root: "E:/code/biz-glance",
+        displayName: "biz-glance",
+        sourcePath: "E:/code/biz-glance",
+        cleanup: async () => {}
       })
     });
 
     const document = writer.writes[0].document;
 
     expect(document.meta.source.lens).toBe("codegraph-assisted");
-    expect(document.meta.source.name).toBe("example/shop");
-    expect(document.meta.source.path).toBe("https://github.com/example/shop.git");
+    expect(document.meta.source.name).toBe("biz-glance");
+    expect(document.meta.source.path).toBe("E:/code/biz-glance");
     expect(document.businessObjects[0]).toMatchObject({
       id: "product",
       name: "商品",
@@ -212,41 +254,31 @@ describe("cli analyze", () => {
     });
   });
 
-  it("requires CodeGraph context when the codegraph-assisted lens is selected", async () => {
+  it("requires CodeGraph context for repository analysis", async () => {
     await expect(
       runAnalyzeCommand({
-        repo: "E:/code/biz-glance/fixtures/java-spring-mini",
-        lens: "codegraph-assisted",
+        repo: "E:/code/biz-glance",
         out: output
       })
-    ).rejects.toThrow("使用 codegraph-assisted lens 时必须提供 --codegraph-context。");
+    ).rejects.toThrow("分析仓库时必须提供 --context。");
   });
 
-  it("falls back to a GitHub archive download when shallow clone fails", async () => {
-    const calls: string[] = [];
-    const repository = await prepareRepositoryInput("https://github.com/example/shop", (value) => value, {
-      clone: async () => {
-        calls.push("clone");
-        throw new Error("network reset");
-      },
-      downloadArchive: async (archiveUrl, targetPath) => {
-        calls.push(`download:${archiveUrl}:${targetPath.endsWith(".tar.gz")}`);
-      },
-      extractArchive: async (archivePath, targetPath) => {
-        calls.push(`extract:${archivePath.endsWith(".tar.gz")}:${targetPath.endsWith("shop")}`);
-      }
-    });
+  it("rejects legacy Java/Spring lens", async () => {
+    await expect(
+      runAnalyzeCommand({
+        repo: "E:/code/biz-glance",
+        lens: "java-spring",
+        codegraphContext: "E:/code/biz-glance/fixtures/codegraph/shop-context.json",
+        out: output
+      })
+    ).rejects.toThrow("当前仅支持 codegraph-assisted lens。");
+  });
 
-    try {
-      expect(repository.displayName).toBe("example/shop");
-      expect(repository.sourcePath).toBe("https://github.com/example/shop.git");
-      expect(calls).toEqual([
-        "clone",
-        "download:https://codeload.github.com/example/shop/tar.gz/HEAD:true",
-        "extract:true:true"
-      ]);
-    } finally {
-      await repository.cleanup();
-    }
+  it("prepares a local repository path without network fetchers", async () => {
+    const repository = await prepareRepositoryInput(".", (value) => resolve("E:/code/biz-glance", value));
+
+    expect(repository.displayName).toBe("biz-glance");
+    expect(repository.sourcePath).toBe(resolve("E:/code/biz-glance", "."));
+    await repository.cleanup();
   });
 });

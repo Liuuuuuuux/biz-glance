@@ -96,7 +96,7 @@ describe("App", () => {
     expect(screen.getByText("Lines: 1-24")).toBeTruthy();
   });
 
-  it("renders a real GitHub shop analysis result as business workbench data", async () => {
+  it("renders a local shop CodeGraph analysis result as business workbench data", async () => {
     const user = userEvent.setup();
     render(<App initialDocument={shopSample as BizGlanceDocument} />);
 

@@ -3,7 +3,8 @@ import { resolve } from "node:path";
 import type { BizGlanceDocument } from "../../../core/src/index";
 import { runAnalyzeCommand } from "./analyze";
 
-const DEFAULT_REPO = "fixtures/java-spring-mini";
+const DEFAULT_REPO = ".";
+const DEFAULT_CODEGRAPH_CONTEXT = "fixtures/codegraph/shop-context.json";
 const DEFAULT_OUT = "dist/smoke.bizglance.json";
 
 type RunAnalyze = typeof runAnalyzeCommand;
@@ -37,37 +38,41 @@ function requireBusinessObject(document: BizGlanceDocument, technicalName: strin
 }
 
 function verifySmokeDocument(document: BizGlanceDocument) {
-  requireBusinessObject(document, "PurchaseOrder");
-  requireBusinessObject(document, "ReceiptOrder");
+  if (document.meta.source.lens !== "codegraph-assisted") {
+    failSmoke("输出不是 codegraph-assisted lens");
+  }
+
+  requireBusinessObject(document, "Product");
+  requireBusinessObject(document, "Category");
 
   if (
     !document.flows.some(
       (item) =>
-        item.from === "purchase-order" &&
-        item.to === "receipt-order" &&
-        item.relation === "creates"
+        item.from === "product" &&
+        item.to === "category" &&
+        item.relation === "references"
     )
   ) {
-    failSmoke("缺少 PurchaseOrder 到 ReceiptOrder 的创建关系");
+    failSmoke("缺少 Product 到 Category 的引用关系");
   }
 
   if (
     !document.statusMutations.some(
-      (item) => item.objectId === "purchase-order" && item.field === "status"
+      (item) => item.objectId === "product" && item.field === "stock"
     )
   ) {
-    failSmoke("缺少 PurchaseOrder.status 状态变更");
+    failSmoke("缺少 Product.stock 状态变更");
   }
 
   if (
     !document.fieldLineages.some(
       (item) =>
-        item.objectId === "receipt-order" &&
-        item.targetField === "sourceStatus" &&
-        item.sourceFields.includes("purchase-order.status")
+        item.objectId === "category" &&
+        item.targetField === "products" &&
+        item.sourceFields.includes("product.category")
     )
   ) {
-    failSmoke("缺少 ReceiptOrder.sourceStatus 字段血缘");
+    failSmoke("缺少 Category.products 字段血缘");
   }
 
   if (document.evidences.length === 0) {
@@ -77,19 +82,22 @@ function verifySmokeDocument(document: BizGlanceDocument) {
 
 export async function runSmokeCommand(options: {
   repo?: string;
+  codegraphContext?: string;
   out?: string;
   runAnalyze?: RunAnalyze;
   readTextFile?: (filePath: string) => Promise<string>;
 } = {}): Promise<SmokeResult> {
   const repo = resolveFromWorkspace(options.repo ?? DEFAULT_REPO);
+  const codegraphContext = resolveFromWorkspace(options.codegraphContext ?? DEFAULT_CODEGRAPH_CONTEXT);
   const outputPath = resolveFromWorkspace(options.out ?? DEFAULT_OUT);
   const runAnalyze = options.runAnalyze ?? runAnalyzeCommand;
   const readTextFile = options.readTextFile ?? ((filePath: string) => readFile(filePath, "utf8"));
 
   await runAnalyze({
     repo,
+    codegraphContext,
     out: outputPath,
-    lens: "java-spring"
+    lens: "codegraph-assisted"
   });
 
   const document = JSON.parse(await readTextFile(outputPath)) as BizGlanceDocument;

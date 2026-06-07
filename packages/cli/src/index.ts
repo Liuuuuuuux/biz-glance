@@ -8,19 +8,23 @@ const program = new Command();
 program.name("bizglance");
 
 program
-  .command("analyze")
-  .requiredOption("--out <path>")
+  .command("analyze [repo]")
+  .option("-o, --out <path>", "generated BizGlance JSON", "dist/bizglance.json")
   .option("--sample <name>")
-  .option("--repo <path-or-github-url>")
-  .option("--lens <name>", "analysis lens", "java-spring")
-  .option("--codegraph-context <path>", "external CodeGraph context and LLM findings JSON")
-  .action(async (options) => {
-    await runAnalyzeCommand(options);
+  .option("--repo <path>", "alias for the local repo argument")
+  .option("-c, --context <path>", "CodeGraph context and LLM findings JSON")
+  .option("--codegraph-context <path>", "alias for --context")
+  .action(async (repo, options) => {
+    await runAnalyzeCommand({
+      ...options,
+      repo: options.repo ?? repo,
+      codegraphContext: options.codegraphContext ?? options.context
+    });
   });
 
 program
   .command("serve")
-  .requiredOption("--data <path>")
+  .option("-d, --data <path>", "BizGlance JSON to preview", "dist/bizglance.json")
   .action(async (options) => {
     const url = await runServeCommand(options);
     console.log(url);
@@ -28,7 +32,8 @@ program
 
 program
   .command("smoke")
-  .option("--repo <path>", "fixture or repository path", "fixtures/java-spring-mini")
+  .option("--repo <path>", "fixture or repository path", ".")
+  .option("--codegraph-context <path>", "external CodeGraph context and LLM findings JSON", "fixtures/codegraph/shop-context.json")
   .option("--out <path>", "generated smoke output", "dist/smoke.bizglance.json")
   .action(async (options) => {
     const result = await runSmokeCommand(options);

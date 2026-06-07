@@ -5,7 +5,7 @@ export interface BizGlanceDocument {
     source: {
       kind: "sample" | "repo";
       name: string;
-      lens: "java-spring" | "generic-sample" | "codegraph-assisted";
+      lens: "generic-sample" | "codegraph-assisted";
       path?: string;
     };
     warnings: string[];

@@ -9,7 +9,5 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": {
-    "fast-glob": "^3.3.3"
-  }
+  "dependencies": {}
 }

@@ -5,8 +5,8 @@ describe("analyzeCodeGraphContext", () => {
   it("turns CodeGraph context and LLM findings into a BizGlance document", () => {
     const doc = analyzeCodeGraphContext({
       source: {
-        name: "example/shop",
-        path: "https://github.com/example/shop.git"
+        name: "shop",
+        path: "E:/code/shop"
       },
       codegraph: {
         query: "Analyze business objects and code evidence",
@@ -91,7 +91,8 @@ describe("analyzeCodeGraphContext", () => {
 
     expect(doc.meta.source.kind).toBe("repo");
     expect(doc.meta.source.lens).toBe("codegraph-assisted");
-    expect(doc.meta.source.name).toBe("example/shop");
+    expect(doc.meta.source.name).toBe("shop");
+    expect(doc.meta.source.path).toBe("E:/code/shop");
     expect(doc.businessObjects).toEqual([
       {
         id: "product",

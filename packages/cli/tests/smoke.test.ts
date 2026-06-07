@@ -10,88 +10,92 @@ function createSmokeDocument(): BizGlanceDocument {
       generatedAt: "2026-06-06T00:00:00.000Z",
       source: {
         kind: "repo",
-        name: "java-spring-mini",
-        lens: "java-spring",
-        path: "E:/code/biz-glance/fixtures/java-spring-mini"
+        name: "biz-glance",
+        lens: "codegraph-assisted",
+        path: "E:/code/biz-glance"
       },
       warnings: []
     },
     businessObjects: [
       {
-        id: "purchase-order",
-        name: "采购订单",
-        technicalName: "PurchaseOrder"
+        id: "product",
+        name: "商品",
+        technicalName: "Product"
       },
       {
-        id: "receipt-order",
-        name: "ReceiptOrder",
-        technicalName: "ReceiptOrder"
+        id: "category",
+        name: "商品分类",
+        technicalName: "Category"
       }
     ],
     flows: [
       {
-        id: "repo-flow-creates-purchase-order-receipt-order",
-        from: "purchase-order",
-        to: "receipt-order",
-        relation: "creates",
-        label: "采购订单生成ReceiptOrder",
+        id: "codegraph-flow-1",
+        from: "product",
+        to: "category",
+        relation: "references",
+        label: "商品归属分类",
         sourceKind: "inferred",
         confidence: "medium",
-        evidenceIds: ["repo-flow-creates-purchase-order-receipt-order"]
+        evidenceIds: ["codegraph-flow-1"]
       }
     ],
     statusMutations: [
       {
-        id: "status-1",
-        objectId: "purchase-order",
-        field: "status",
-        trigger: "setStatus",
-        toStatus: "APPROVED",
-        sourceKind: "explicit",
+        id: "codegraph-status-1",
+        objectId: "product",
+        field: "stock",
+        trigger: "ProductController.addProduct",
+        toStatus: "created",
+        sourceKind: "inferred",
         confidence: "medium",
-        evidenceIds: ["repo-status-purchase-order"]
+        evidenceIds: ["codegraph-status-1"]
       }
     ],
     fieldLineages: [
       {
-        id: "repo-lineage-receipt-order-source-status",
-        objectId: "receipt-order",
-        targetField: "sourceStatus",
-        sourceFields: ["purchase-order.status"],
-        expression: "order.getStatus()",
+        id: "codegraph-lineage-1",
+        objectId: "category",
+        targetField: "products",
+        sourceFields: ["product.category"],
+        expression: "Product.category",
         sourceKind: "inferred",
         confidence: "medium",
-        evidenceIds: ["repo-lineage-receipt-order-source-status"]
+        evidenceIds: ["codegraph-lineage-1"]
       }
     ],
     evidences: [
       {
-        id: "repo-object-purchase-order",
-        title: "PurchaseOrder domain",
-        filePath: "E:/code/biz-glance/fixtures/java-spring-mini/src/main/java/com/example/PurchaseOrder.java",
-        symbol: "PurchaseOrder",
-        summary: "识别到 PurchaseOrder 领域对象"
+        id: "codegraph-object-product",
+        title: "商品 业务对象",
+        filePath: "src/main/java/com/example/shop/domain/Product.java",
+        symbol: "Product",
+        lines: { start: 8, end: 42 },
+        summary: "LLM 基于 CodeGraph class 节点识别商品领域对象"
       },
       {
-        id: "repo-lineage-receipt-order-source-status",
-        title: "ReceiptOrder.sourceStatus",
-        filePath: "E:/code/biz-glance/fixtures/java-spring-mini/src/main/java/com/example/PurchaseOrderService.java",
-        symbol: "setSourceStatus",
-        summary: "识别到 ReceiptOrder.sourceStatus 来源于 PurchaseOrder.status"
+        id: "codegraph-flow-1",
+        title: "商品归属分类",
+        filePath: "src/main/java/com/example/shop/domain/Product.java",
+        symbol: "Product",
+        lines: { start: 8, end: 42 },
+        summary: "LLM 基于 CodeGraph class 节点识别商品分类关系"
       }
     ]
   };
 }
 
 describe("cli smoke", () => {
-  it("analyzes the default Java/Spring fixture and verifies the reproducible demo contract", async () => {
-    const analyzeCalls: Array<{ repo?: string; out: string }> = [];
+  it("analyzes the default CodeGraph context and verifies the reproducible demo contract", async () => {
+    const analyzeCalls: Array<{ repo?: string; out?: string; codegraphContext?: string; lens?: string }> = [];
 
     const result = await runSmokeCommand({
       runAnalyze: async (options) => {
         analyzeCalls.push({
           repo: options.repo,
-          out: options.out
+          out: options.out,
+          codegraphContext: options.codegraphContext,
+          lens: options.lens
         });
       },
       readTextFile: async () => JSON.stringify(createSmokeDocument())
@@ -99,8 +103,10 @@ describe("cli smoke", () => {
 
     expect(analyzeCalls).toEqual([
       {
-        repo: resolve("E:/code/biz-glance/fixtures/java-spring-mini"),
-        out: resolve("E:/code/biz-glance/dist/smoke.bizglance.json")
+        repo: resolve("E:/code/biz-glance"),
+        out: resolve("E:/code/biz-glance/dist/smoke.bizglance.json"),
+        codegraphContext: resolve("E:/code/biz-glance/fixtures/codegraph/shop-context.json"),
+        lens: "codegraph-assisted"
       }
     ]);
     expect(result).toEqual({
@@ -116,7 +122,7 @@ describe("cli smoke", () => {
   it("fails with a focused message when the smoke output misses a required business object", async () => {
     const document = createSmokeDocument();
     document.businessObjects = document.businessObjects.filter(
-      (item) => item.technicalName !== "ReceiptOrder"
+      (item) => item.technicalName !== "Category"
     );
 
     await expect(
@@ -124,6 +130,6 @@ describe("cli smoke", () => {
         runAnalyze: async () => {},
         readTextFile: async () => JSON.stringify(document)
       })
-    ).rejects.toThrow("Smoke 验证失败: 缺少业务对象 ReceiptOrder");
+    ).rejects.toThrow("Smoke 验证失败: 缺少业务对象 Category");
   });
 });

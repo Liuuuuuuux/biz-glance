@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.12.4",
   "scripts": {
+    "analyze": "pnpm --filter @bizglance/cli dev analyze",
+    "serve": "pnpm --filter @bizglance/cli dev serve",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "build": "pnpm --filter @bizglance/web build",

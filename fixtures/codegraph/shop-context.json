@@ -1,0 +1,121 @@
+{
+  "codegraph": {
+    "query": "Analyze business objects, controllers, services, routes, and evidence",
+    "summary": "CodeGraph context for the reproducible shop smoke fixture",
+    "nodes": [
+      {
+        "kind": "class",
+        "name": "Product",
+        "qualifiedName": "com.example.shop.domain.Product",
+        "filePath": "src/main/java/com/example/shop/domain/Product.java",
+        "language": "java",
+        "startLine": 8,
+        "endLine": 42
+      },
+      {
+        "kind": "class",
+        "name": "Category",
+        "qualifiedName": "com.example.shop.domain.Category",
+        "filePath": "src/main/java/com/example/shop/domain/Category.java",
+        "language": "java",
+        "startLine": 6,
+        "endLine": 28
+      },
+      {
+        "kind": "method",
+        "name": "addProduct",
+        "qualifiedName": "com.example.shop.controller.ProductController.addProduct",
+        "filePath": "src/main/java/com/example/shop/controller/ProductController.java",
+        "language": "java",
+        "startLine": 31,
+        "endLine": 45
+      }
+    ],
+    "edges": [
+      {
+        "source": "Product",
+        "target": "Category",
+        "kind": "references"
+      }
+    ],
+    "codeBlocks": [],
+    "relatedFiles": [
+      "src/main/java/com/example/shop/domain/Product.java",
+      "src/main/java/com/example/shop/domain/Category.java",
+      "src/main/java/com/example/shop/controller/ProductController.java"
+    ],
+    "stats": {
+      "nodeCount": 3,
+      "edgeCount": 1,
+      "fileCount": 3,
+      "codeBlockCount": 0,
+      "totalCodeSize": 0
+    }
+  },
+  "findings": {
+    "businessObjects": [
+      {
+        "technicalName": "Product",
+        "name": "商品",
+        "module": "catalog",
+        "description": "电商系统中的可售商品。",
+        "tags": ["domain-entity", "catalog"],
+        "evidence": {
+          "nodeName": "Product",
+          "summary": "LLM 基于 CodeGraph class 节点识别商品领域对象"
+        }
+      },
+      {
+        "technicalName": "Category",
+        "name": "商品分类",
+        "module": "catalog",
+        "description": "商品目录分类。",
+        "tags": ["domain-entity", "catalog"],
+        "evidence": {
+          "nodeName": "Category",
+          "summary": "LLM 基于 CodeGraph class 节点识别商品分类领域对象"
+        }
+      }
+    ],
+    "flows": [
+      {
+        "from": "Product",
+        "to": "Category",
+        "relation": "references",
+        "label": "商品归属分类",
+        "confidence": "high",
+        "evidence": {
+          "nodeName": "Product",
+          "summary": "LLM 基于 CodeGraph class 节点识别商品分类关系"
+        }
+      }
+    ],
+    "statusMutations": [
+      {
+        "object": "Product",
+        "field": "stock",
+        "trigger": "ProductController.addProduct",
+        "toStatus": "created",
+        "confidence": "medium",
+        "evidence": {
+          "nodeName": "addProduct",
+          "route": "/product/add",
+          "summary": "LLM 基于 CodeGraph controller 方法判断该接口创建商品"
+        }
+      }
+    ],
+    "fieldLineages": [
+      {
+        "object": "Category",
+        "targetField": "products",
+        "sourceFields": ["Product.category"],
+        "expression": "Product.category",
+        "confidence": "high",
+        "evidence": {
+          "nodeName": "Product",
+          "summary": "LLM 基于 CodeGraph 关系识别 Category.products 来源于 Product.category"
+        }
+      }
+    ]
+  }
+}

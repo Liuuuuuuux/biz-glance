@@ -3,6 +3,7 @@ import { access, copyFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const DEFAULT_WEB_PORT = 4173;
+const DEFAULT_DATA_PATH = "dist/bizglance.json";
 
 function resolveFromInitCwd(targetPath: string) {
   if (/^[A-Za-z]:\\|^\//.test(targetPath)) {
@@ -17,8 +18,12 @@ export function buildWebDataUrl(dataPath: string) {
   return `http://localhost:${DEFAULT_WEB_PORT}/?data=${encoded}`;
 }
 
-export async function runServeCommand(options: { data: string }) {
-  const resolvedDataPath = resolveFromInitCwd(options.data);
+export function resolveServeDataPath(dataPath?: string) {
+  return resolveFromInitCwd(dataPath ?? DEFAULT_DATA_PATH);
+}
+
+export async function runServeCommand(options: { data?: string }) {
+  const resolvedDataPath = resolveServeDataPath(options.data);
   await access(resolvedDataPath);
 
   const workspaceRoot = process.env.INIT_CWD ?? "E:/code/biz-glance";

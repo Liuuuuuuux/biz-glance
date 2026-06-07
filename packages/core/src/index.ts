@@ -4,5 +4,4 @@ export {
   analyzeCodeGraphContext,
   type CodeGraphAssistedAnalysisInput
 } from "./analyzers/codegraphAssisted";
-export { analyzeJavaSpringProject } from "./analyzers/javaSpring";
 export { writeDocument } from "./export/writeDocument";

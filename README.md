@@ -18,6 +18,48 @@ pnpm smoke
 
 该命令会读取 `fixtures/codegraph/shop-context.json`，生成 `dist/smoke.bizglance.json`，并校验 `Product`、`Category`、业务关系、状态变更、字段血缘和代码证据是否完整。
 
+## 一键工作流
+
+如果已经有一份外部生成的 CodeGraph-assisted 输入 JSON，可以直接运行：
+
+```powershell
+pnpm --filter @bizglance/cli dev workflow . --context .\fixtures\codegraph\shop-context.json --no-serve
+```
+
+该命令会自动执行：
+
+- `bizglance init`
+- `bizglance analyze`
+- `bizglance validate`
+- 可选 `bizglance serve`
+
+输出会写到：
+
+```text
+.bizglance/
+  bizglance.json
+  meta.json
+  intermediate/
+    codegraph-assisted-input.json
+```
+
+常用参数：
+
+- `--full`：忽略 `.bizglance/intermediate/codegraph-assisted-input.json` 缓存，要求显式 `--context` 并重跑分析。
+- `--review`：跳过重新分析，直接复查现有 `.bizglance/bizglance.json`，可配合 `--no-serve` 做静态校验。
+- `--language <language>`：更新 `.bizglance/config.json` 的语言偏好，例如 `zh`、`en`。
+- `--no-serve`：只生成和校验 `.bizglance/bizglance.json`，不启动 Web 工作台。
+
+示例：
+
+```powershell
+# 强制全量重跑
+pnpm --filter @bizglance/cli dev workflow . --full --context .\fixtures\codegraph\shop-context.json --language zh --no-serve
+
+# 复查已有图谱
+pnpm --filter @bizglance/cli dev workflow . --review --no-serve
+```
+
 ## CodeGraph 辅助分析
 
 `codegraph-assisted` 是当前唯一的仓库分析模式：先由外部 CodeGraph/MCP 解析本地仓库，再由 LLM 分析业务含义。BizGlance 不克隆远程仓库，也不重新解析 AST，而是读取一份外部上下文 JSON：

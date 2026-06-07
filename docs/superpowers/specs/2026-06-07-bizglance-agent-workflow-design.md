@@ -235,6 +235,8 @@ Agent prompt 需要明确要求 LLM 只输出 JSON，结构等价于：
 - 复杂多 agent 文件分析体系。
 
 BizGlance 的第一目标不是“完整代码结构图谱”，而是“从可靠结构事实中提炼业务理解”。
+Understand-Anything path:
+F:\study\GitHub\Understand-AnythingF:\study\GitHub\Understand-Anything
 
 ## 8. 错误处理
 

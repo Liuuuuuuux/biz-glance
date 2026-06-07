@@ -17,6 +17,17 @@ function createMemoryWriter() {
   };
 }
 
+function createTextFileWriter() {
+  const writes: Array<{ filePath: string; content: string }> = [];
+
+  return {
+    writes,
+    writeTextFile: async (filePath: string, content: string) => {
+      writes.push({ filePath, content });
+    }
+  };
+}
+
 describe("cli analyze", () => {
   it("writes a sample document", async () => {
     const writer = createMemoryWriter();
@@ -261,6 +272,150 @@ describe("cli analyze", () => {
         out: output
       })
     ).rejects.toThrow("分析仓库时必须提供 --context。");
+  });
+
+  it("rejects invalid CodeGraph-assisted input before analysis", async () => {
+    await expect(
+      runAnalyzeCommand({
+        repo: ".",
+        codegraphContext: "E:/code/biz-glance/fixtures/codegraph/shop-context.json",
+        out: output,
+        readTextFile: async () =>
+          JSON.stringify({
+            codegraph: { nodes: [], edges: [], codeBlocks: [], relatedFiles: [] },
+            findings: {
+              businessObjects: [{ name: "商品" }]
+            }
+          }),
+        prepareRepositoryInput: async () => ({
+          root: "E:/code/biz-glance",
+          displayName: "biz-glance",
+          sourcePath: "E:/code/biz-glance",
+          cleanup: async () => {}
+        })
+      })
+    ).rejects.toThrow("CodeGraph-assisted 输入校验失败");
+  });
+
+  it("writes analysis meta next to .bizglance output", async () => {
+    const writer = createMemoryWriter();
+    const textFileWriter = createTextFileWriter();
+
+    await runAnalyzeCommand({
+      repo: ".",
+      codegraphContext: "E:/code/biz-glance/fixtures/codegraph/shop-context.json",
+      out: "E:/code/biz-glance/tmp/analyze-meta/.bizglance/bizglance.json",
+      writeDocument: writer.writeDocument,
+      writeTextFile: textFileWriter.writeTextFile,
+      readGitCommit: async () => "abc123def456",
+      now: () => "2026-06-07T10:00:00.000Z",
+      readTextFile: async () =>
+        JSON.stringify({
+          codegraph: { nodes: [], edges: [], codeBlocks: [], relatedFiles: [] },
+          findings: {
+            businessObjects: [{ technicalName: "Product", name: "商品" }],
+            flows: [],
+            statusMutations: [],
+            fieldLineages: []
+          }
+        }),
+      prepareRepositoryInput: async () => ({
+        root: "E:/code/biz-glance",
+        displayName: "biz-glance",
+        sourcePath: "E:/code/biz-glance",
+        cleanup: async () => {}
+      })
+    });
+
+    const metaWrite = textFileWriter.writes.find(
+      (item) =>
+        item.filePath.replace(/\\/g, "/") ===
+        "E:/code/biz-glance/tmp/analyze-meta/.bizglance/meta.json"
+    );
+
+    expect(metaWrite).toBeDefined();
+    expect(JSON.parse(metaWrite!.content)).toMatchObject({
+      version: "0.1.0",
+      generatedAt: "2026-06-07T10:00:00.000Z",
+      gitCommit: "abc123def456",
+      source: {
+        name: "biz-glance",
+        path: "E:/code/biz-glance"
+      },
+      contextPath: "E:/code/biz-glance/fixtures/codegraph/shop-context.json"
+    });
+  });
+
+  it("writes codegraph-assisted input into .bizglance intermediate output", async () => {
+    const writer = createMemoryWriter();
+    const textFileWriter = createTextFileWriter();
+
+    await runAnalyzeCommand({
+      repo: ".",
+      codegraphContext: "E:/code/biz-glance/fixtures/codegraph/shop-context.json",
+      out: "E:/code/biz-glance/tmp/analyze-intermediate/.bizglance/bizglance.json",
+      writeDocument: writer.writeDocument,
+      writeTextFile: textFileWriter.writeTextFile,
+      readTextFile: async () =>
+        JSON.stringify({
+          codegraph: { nodes: [], edges: [], codeBlocks: [], relatedFiles: [] },
+          findings: {
+            businessObjects: [{ technicalName: "Product", name: "商品" }],
+            flows: [],
+            statusMutations: [],
+            fieldLineages: []
+          }
+        }),
+      prepareRepositoryInput: async () => ({
+        root: "E:/code/biz-glance",
+        displayName: "biz-glance",
+        sourcePath: "E:/code/biz-glance",
+        cleanup: async () => {}
+      })
+    });
+
+    expect(
+      textFileWriter.writes.some(
+        (item) =>
+          item.filePath.replace(/\\/g, "/") ===
+          "E:/code/biz-glance/tmp/analyze-intermediate/.bizglance/intermediate/codegraph-assisted-input.json"
+      )
+    ).toBe(true);
+  });
+
+  it("rejects invalid final BizGlance documents before writing output", async () => {
+    const writer = createMemoryWriter();
+
+    await expect(
+      runAnalyzeCommand({
+        repo: ".",
+        codegraphContext: "E:/code/biz-glance/fixtures/codegraph/shop-context.json",
+        out: "E:/code/biz-glance/tmp/analyze-invalid-output/.bizglance/bizglance.json",
+        writeDocument: writer.writeDocument,
+        readTextFile: async () =>
+          JSON.stringify({
+            codegraph: { nodes: [], edges: [], codeBlocks: [], relatedFiles: [] },
+            findings: {
+              businessObjects: [{ technicalName: "Product", name: "商品" }],
+              flows: [],
+              statusMutations: [],
+              fieldLineages: []
+            }
+          }),
+        prepareRepositoryInput: async () => ({
+          root: "E:/code/biz-glance",
+          displayName: "biz-glance",
+          sourcePath: "E:/code/biz-glance",
+          cleanup: async () => {}
+        }),
+        transformDocument: async (document) => ({
+          ...document,
+          flows: undefined as unknown as BizGlanceDocument["flows"]
+        })
+      })
+    ).rejects.toThrow("BizGlance 文档校验失败");
+
+    expect(writer.writes).toHaveLength(0);
   });
 
   it("rejects legacy Java/Spring lens", async () => {

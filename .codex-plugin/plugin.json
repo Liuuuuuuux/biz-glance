@@ -1,0 +1,25 @@
+{
+  "name": "bizglance",
+  "version": "0.1.0",
+  "description": "BizGlance business knowledge graph workflow plugin",
+  "author": {
+    "name": "BizGlance"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "BizGlance",
+    "shortDescription": "Analyze local repos into business knowledge graphs.",
+    "longDescription": "BizGlance adds a local agent workflow for initializing .bizglance, assembling CodeGraph-assisted business graphs, validating outputs, and previewing the workbench.",
+    "developerName": "BizGlance",
+    "category": "Productivity",
+    "capabilities": [
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "/bizglance . --context ./.bizglance/intermediate/codegraph-assisted-input.json",
+      "Run bizglance workflow . --context ./fixtures/codegraph/shop-context.json --no-serve",
+      "Review the current .bizglance graph and explain key business objects."
+    ]
+  }
+}

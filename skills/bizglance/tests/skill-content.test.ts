@@ -12,8 +12,12 @@ describe("bizglance agent skill", () => {
     expect(content).toContain("collect-repo-context.mjs");
     expect(content).toContain("business-object-agent");
     expect(content).toContain("merge-business-findings.mjs");
+    expect(content).toContain("validate-findings.mjs");
+    expect(content).toContain("review-warnings.json");
     expect(content).toContain("llm-findings.json");
     expect(content).toContain("codegraph-assisted-input.json");
+    expect(content).toContain("evidence-reviewer");
+    expect(content).toContain("business-graph-reviewer");
     expect(content).toContain("bizglance analyze");
     expect(content).toContain("bizglance validate");
     expect(content).toContain("bizglance serve");

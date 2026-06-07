@@ -102,4 +102,31 @@ describe("merge-business-findings script", () => {
     expect(merged.findings.statusMutations).toEqual([]);
     expect(merged.findings.fieldLineages).toEqual([]);
   });
+
+  it("applies review downgrades before writing merged context", async () => {
+    const { intermediate } = await resetWorkspace();
+    const output = resolve(intermediate, "codegraph-assisted-input.json");
+    await writeFile(
+      resolve(intermediate, "review-warnings.json"),
+      JSON.stringify(
+        {
+          warnings: [],
+          downgrades: [{ target: "flows[0]", confidence: "low", reason: "缺少 evidence。" }],
+          removals: [],
+          normalizations: []
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    const { mergeBusinessFindings } = await import(pathToFileURL(scriptPath).href);
+
+    await mergeBusinessFindings({ intermediateDir: intermediate, output });
+
+    const merged = JSON.parse(await readFile(output, "utf8")) as {
+      findings: { flows: Array<{ confidence: string }> };
+    };
+    expect(merged.findings.flows[0].confidence).toBe("low");
+  });
 });

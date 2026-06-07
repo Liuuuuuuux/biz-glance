@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { BizGlanceDocument } from "../../../core/src/index";
 import { runAnalyzeCommand } from "./analyze";
 import { runInitCommand, type InitResult } from "./init";
 import { runServeCommand } from "./serve";
@@ -48,6 +49,13 @@ export interface WorkflowCommandResult {
   previewUrl?: string;
 }
 
+type ReviewFindingsResult = {
+  warnings: Array<{ code: string; severity: string; target: string; message: string }>;
+  downgrades: Array<{ target: string; confidence: "high" | "medium" | "low"; reason: string }>;
+  removals: unknown[];
+  normalizations: unknown[];
+};
+
 type RepoContext = {
   repo?: {
     name?: string;
@@ -85,6 +93,12 @@ async function readJsonFile<T>(filePath: string): Promise<T> {
 async function writeJsonFile(filePath: string, value: unknown) {
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function defaultReviewFindings(options: { intermediateDir: string }): Promise<ReviewFindingsResult> {
+  const validateScriptPath = resolve(REPO_ROOT, "skills/bizglance/scripts/validate-findings.mjs");
+  const { validateFindings } = await import(pathToFileURL(validateScriptPath).href);
+  return await validateFindings({ intermediateDir: options.intermediateDir });
 }
 
 function buildCodeGraphContextFromRepoContext(repoContext: RepoContext) {
@@ -205,6 +219,7 @@ export async function runWorkflowCommand(options: {
     full?: boolean;
     review?: boolean;
     language?: string;
+    transformDocument?: (document: BizGlanceDocument) => Promise<BizGlanceDocument> | BizGlanceDocument;
   }) => Promise<void>;
   validateCommand?: (options: {
     input: string;
@@ -216,6 +231,7 @@ export async function runWorkflowCommand(options: {
     intermediateDir: string;
     language?: string;
   }) => Promise<string>;
+  reviewFindings?: (options: { intermediateDir: string }) => Promise<ReviewFindingsResult>;
   fileExists?: (filePath: string) => Promise<boolean>;
   readTextFile?: (filePath: string) => Promise<string>;
   writeTextFile?: (filePath: string, content: string) => Promise<void>;
@@ -230,6 +246,7 @@ export async function runWorkflowCommand(options: {
   const validateCommand = options.validateCommand ?? runValidateCommand;
   const serveCommand = options.serveCommand ?? runServeCommand;
   const generateContext = options.generateContext ?? defaultGenerateContext;
+  const reviewFindings = options.reviewFindings ?? defaultReviewFindings;
   const fileExists = options.fileExists ?? defaultFileExists;
   const readTextFile = options.readTextFile ?? ((filePath: string) => readFile(filePath, "utf8"));
   const writeTextFile = options.writeTextFile ?? ((filePath: string, content: string) => writeFile(filePath, content, "utf8"));
@@ -287,6 +304,7 @@ export async function runWorkflowCommand(options: {
   let resolvedContextPath =
     options.codegraphContext ??
     (!(options.full) && (await fileExists(paths.cachedInputPath)) ? paths.cachedInputPath : undefined);
+  let reviewResult: ReviewFindingsResult | undefined;
 
   if (!resolvedContextPath) {
     resolvedContextPath = await generateContext({
@@ -294,6 +312,7 @@ export async function runWorkflowCommand(options: {
       intermediateDir: paths.intermediateDir,
       language: options.language
     });
+    reviewResult = await reviewFindings({ intermediateDir: paths.intermediateDir });
   }
 
   await analyzeCommand({
@@ -303,7 +322,19 @@ export async function runWorkflowCommand(options: {
     lens: "codegraph-assisted",
     full: options.full,
     review: options.review,
-    language: options.language
+    language: options.language,
+    transformDocument: reviewResult
+      ? (document) => ({
+          ...document,
+          meta: {
+            ...document.meta,
+            warnings: [
+              ...document.meta.warnings,
+              ...reviewResult.warnings.map((warning) => `${warning.code}: ${warning.message}`)
+            ]
+          }
+        })
+      : undefined
   });
 
   await validateCommand({

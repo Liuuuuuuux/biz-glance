@@ -118,10 +118,103 @@ describe("cli workflow", () => {
         businessObjects: Array<{ technicalName: string }>;
       };
     };
+    const reviewWarnings = JSON.parse(
+      await readFile(resolve(repo, ".bizglance/intermediate/review-warnings.json"), "utf8")
+    ) as {
+      warnings: string[];
+      downgrades: string[];
+    };
 
     expect(generatedInput.findings.businessObjects).toEqual([
       expect.objectContaining({ technicalName: "Invoice" })
     ]);
+    expect(Array.isArray(reviewWarnings.warnings)).toBe(true);
+    expect(Array.isArray(reviewWarnings.downgrades)).toBe(true);
     expect(document.businessObjects.map((item) => item.technicalName)).toContain("Invoice");
+  });
+
+  it("generates useful candidates and warnings for a realistic billing project", async () => {
+    const repo = resolve(tmpRoot, "realistic-billing-project");
+
+    await resetDir(repo);
+    await writeFile(
+      resolve(repo, "README.md"),
+      "# Billing Service\n\nCreates invoices, issues payments, and tracks invoice status.\n",
+      "utf8"
+    );
+    await mkdir(resolve(repo, "src/controllers"), { recursive: true });
+    await mkdir(resolve(repo, "src/domain"), { recursive: true });
+    await mkdir(resolve(repo, "src/services"), { recursive: true });
+    await writeFile(
+      resolve(repo, "package.json"),
+      JSON.stringify({ name: "billing-service", dependencies: { express: "^5.0.0" } }, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      resolve(repo, "src/domain/Invoice.ts"),
+      [
+        "export interface Invoice {",
+        "  id: string;",
+        "  status: 'draft' | 'issued' | 'paid';",
+        "  subtotal: number;",
+        "  taxAmount: number;",
+        "  totalAmount: number;",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      resolve(repo, "src/controllers/InvoiceController.ts"),
+      [
+        "export class InvoiceController {",
+        "  async issueInvoice() {",
+        "    return '/api/invoices/issue';",
+        "  }",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      resolve(repo, "src/services/InvoiceService.ts"),
+      [
+        "export class InvoiceService {",
+        "  issueInvoice(invoice: { status: string }) {",
+        "    invoice.status = 'issued';",
+        "  }",
+        "  calculateTotal(subtotal: number, taxAmount: number) {",
+        "    return subtotal + taxAmount;",
+        "  }",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await runWorkflowCommand({ repo, noServe: true });
+    const repoContext = JSON.parse(await readFile(resolve(repo, ".bizglance/intermediate/repo-context.json"), "utf8")) as {
+      entrypoints: Array<{ filePath: string; route?: string }>;
+      entityCandidates: Array<{ technicalName: string }>;
+      statusCandidates: Array<{ field: string }>;
+      fieldCandidates: Array<{ field: string }>;
+    };
+    const document = JSON.parse(await readFile(result.outputPath, "utf8")) as {
+      businessObjects: Array<{ technicalName?: string }>;
+      meta: { warnings: string[] };
+    };
+
+    expect(repoContext.entrypoints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ filePath: "src/controllers/InvoiceController.ts" }),
+        expect.objectContaining({ route: "/api/invoices/issue" })
+      ])
+    );
+    expect(repoContext.entityCandidates).toEqual([
+      expect.objectContaining({ technicalName: "Invoice" })
+    ]);
+    expect(repoContext.statusCandidates.map((item) => item.field)).toContain("status");
+    expect(repoContext.fieldCandidates.map((item) => item.field)).toEqual(
+      expect.arrayContaining(["subtotal", "taxAmount", "totalAmount"])
+    );
+    expect(document.businessObjects.map((item) => item.technicalName)).toContain("Invoice");
+    expect(Array.isArray(document.meta.warnings)).toBe(true);
   });
 });

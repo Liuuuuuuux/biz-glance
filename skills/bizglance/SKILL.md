@@ -97,14 +97,16 @@ bizglance analyze <repo> --context .bizglance/intermediate/codegraph-assisted-in
 
 Use `--full` to ignore cached intermediate files. Use `--review` to reuse existing BizGlance output and revalidate or preview it.
 
-## Phase 3.5: Review
+## Phase 3.5: Deterministic Review
 
-When `--review` is requested or when findings are high impact, run:
+Always run `skills/bizglance/scripts/validate-findings.mjs` after agent findings are present and before assemble. Save the output as `.bizglance/intermediate/review-warnings.json`.
+
+Then run the prompt reviewers when the user passes `--review`, when high-confidence findings have weak evidence, or when deterministic review emits warnings:
 
 - `evidence-reviewer`
 - `business-graph-reviewer`
 
-Reviewer output should be warnings, downgrades, removals, and normalizations. Reviewers must not add new business conclusions.
+Reviewers must not add new business conclusions. They may recommend warnings, downgrades, removals, or normalizations.
 
 ## Phase 4: Validate
 

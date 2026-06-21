@@ -1,140 +1,294 @@
 ---
 name: bizglance
-description: Run the BizGlance agent workflow for a local repository. Use when the user invokes /bizglance or asks Codex to initialize, analyze, validate, and preview a business knowledge graph for a codebase with BizGlance.
+description: 分析本地仓库，生成业务知识图谱。使用 /bizglance 或等效命令触发。识别业务对象、业务流转、状态变更和字段血缘。
+argument-hint: ["[path] [--full|--review|--language <lang>|--no-serve|--context <file>]"]
 ---
 
-# BizGlance Agent Workflow
+# /bizglance
 
-Use this skill to provide a single agent entry equivalent to:
+分析目标仓库，生成 `.bizglance/bizglance.json` 业务知识图谱。通过确定性脚本采集代码事实，再调度 LLM agent 进行业务语义分析。
 
-```text
-/bizglance [path] [--full] [--review] [--language zh] [--no-serve]
-```
+## 参数
 
-Keep orchestration in the agent and execution in the CLI. Use deterministic scripts for cheap repository facts, then use specialized LLM agents for business findings. Do not build a full AST engine in the first phase.
+- `$ARGUMENTS` 可包含：
+  - 目标仓库路径（如 `/path/to/repo`），默认当前目录
+  - `--full` — 忽略缓存，强制全量重新分析
+  - `--review` — 跳过分析，复查已有 bizglance.json
+  - `--language <lang>` — 输出语言（`zh`、`en` 等），默认 `zh`
+  - `--no-serve` — 只生成 JSON，不启动 Web 工作台
+  - `--context <file>` — 手动指定 codegraph-assisted-input.json（调试用）
 
-When the local CLI is available, prefer the thin orchestration command:
+---
+
+## 进度报告
+
+每个 Phase 开始时报告进度：
+
+> `[Phase N/5] <阶段名称>...`
+
+Phase 完成时简短确认：
+
+> `Phase N complete. <一句话总结>`
+
+---
+
+## Phase 0 — Pre-flight
+
+1. 解析 `$ARGUMENTS`，确定目标仓库路径 `$REPO_ROOT`（默认当前目录）。
+2. 初始化工作目录：
 
 ```bash
-bizglance workflow <repo> [--context <codegraph-assisted-input.json>] [--full] [--review] [--language zh] [--no-serve]
+pnpm --filter @bizglance/cli dev init "$REPO_ROOT"
 ```
 
-This command should internally chain `bizglance init`, deterministic preprocessing, findings merge, `bizglance analyze`, `bizglance validate`, and optional `bizglance serve`.
+3. 读取 `.bizglance/config.json`，记录语言偏好。
 
-Workflow parameter intent:
+4. 如果 `--review` 参数存在且 `.bizglance/bizglance.json` 已存在，跳到 Phase 4。
 
-- `--full`: ignore cached `.bizglance/intermediate/codegraph-assisted-input.json`; use explicit `--context` when supplied, otherwise regenerate deterministic context and merged findings.
-- `--review`: skip re-analysis and only validate or preview existing `.bizglance/bizglance.json`.
-- `--language <language>`: persist the preferred output language into `.bizglance/config.json`.
+5. 获取当前 git commit：
 
-## Phase 0: Pre-flight
-
-1. Resolve the target repository path. Default to the current working directory.
-2. Run `bizglance init <repo>` to create `.bizglance/`, `.bizglance/intermediate/`, `.bizglance/tmp/`, and default config files.
-3. Read `.bizglance/config.json` when present.
-4. Capture the current git commit when available and write it into `.bizglance/meta.json` if the implementation supports it.
-5. If the path does not exist, stop and report the failing path.
-
-## Phase 1: Deterministic Repository Facts
-
-1. Run `skills/bizglance/scripts/collect-repo-context.mjs` to collect README summary, manifests, entrypoints, entity candidates, status candidates, and field candidates.
-2. Save the output as `.bizglance/intermediate/repo-context.json`.
-3. Ask CodeGraph for richer business-relevant structure facts when available: routes, controllers, services, entities, methods, fields, and key call paths.
-4. Save CodeGraph facts as `.bizglance/intermediate/codegraph-context.json`. If CodeGraph is unavailable, keep the deterministic facts and continue with lower-confidence findings.
-
-## Phase 2: LLM Business Findings
-
-Use specialized agents instead of one large prompt:
-
-- `business-object-agent`
-- `business-flow-agent`
-- `status-mutation-agent`
-- `field-lineage-agent`
-
-Each agent must generate only JSON and save its own findings file:
-
-```text
-.bizglance/intermediate/business-object-findings.json
-.bizglance/intermediate/business-flow-findings.json
-.bizglance/intermediate/status-mutation-findings.json
-.bizglance/intermediate/field-lineage-findings.json
+```bash
+git -C "$REPO_ROOT" rev-parse HEAD
 ```
 
-Legacy or debug runs may still use `.bizglance/intermediate/llm-findings.json` when manually assembling context.
+---
 
-Required shape:
+## Phase 1 — 确定性代码事实采集
 
-```json
+> `[Phase 1/5] 采集代码结构事实...`
+
+运行确定性脚本收集仓库结构：
+
+```bash
+node "<SKILL_DIR>/scripts/collect-repo-context.mjs" "$REPO_ROOT" "$REPO_ROOT/.bizglance/intermediate/repo-context.json"
+```
+
+读取产出文件：
+
+- `$REPO_ROOT/.bizglance/intermediate/repo-context.json` — entityCandidates, entrypoints, readme, stats
+
+基于 repo-context.json 生成 codegraph-context.json：
+
+```bash
+cat > "$REPO_ROOT/.bizglance/intermediate/codegraph-context.json" << 'ENDJSON'
 {
-  "businessObjects": [],
-  "flows": [],
-  "statusMutations": [],
-  "fieldLineages": []
+  "query": "BizGlance deterministic repository preprocessor",
+  "summary": "<从 repo-context.json 的 readme.summary 提取>",
+  "nodes": [
+    <将 entityCandidates 和 entrypoints 转为 {kind, name, filePath, startLine, endLine} 格式>
+  ],
+  "edges": [],
+  "codeBlocks": [],
+  "relatedFiles": [<所有引用文件路径去重>],
+  "stats": {
+    "nodeCount": <节点数>,
+    "edgeCount": 0,
+    "fileCount": <repo-context.json 的 stats.fileCount>,
+    "codeBlockCount": 0,
+    "totalCodeSize": 0
+  }
 }
+ENDJSON
 ```
 
-Rules:
+> Phase 1 complete. 识别到 <N> 个 entity candidates，<M> 个 entrypoints。
 
-- Do not invent file paths or line numbers.
-- Mark unsupported conclusions as `low` confidence.
-- Keep structure facts and business inference separate.
-- Prefer the requested language, defaulting to Chinese (`zh`).
-- Include evidence with `nodeName`, `filePath`, `startLine`, `endLine`, `route`, and `summary` whenever available.
+---
 
-## Phase 3: Assemble
+## Phase 2 — LLM 业务分析
 
-Run `skills/bizglance/scripts/merge-business-findings.mjs` to merge `codegraph-context.json` and the four agent findings files into:
+> `[Phase 2/5] 调度 LLM agent 分析业务语义...`
 
-```text
-.bizglance/intermediate/codegraph-assisted-input.json
-```
+这是核心阶段。调度 4 个专业 agent 进行业务分析。
 
-Then run:
+**重要**：每个 agent 是一个独立的 subagent，通过 Agent tool 调度。它们读取 Phase 1 的产出文件和源代码，写入各自的 findings 文件。
+
+### 2.1 business-object-agent
+
+调度 business-object-agent 识别业务对象。
+
+Agent 定义文件：`<SKILL_DIR>/agents/business-object-agent.md`
+
+Dispatch prompt：
+
+> 分析 `$REPO_ROOT` 中的仓库，识别真正的业务对象。
+>
+> 项目根目录：`$REPO_ROOT`
+> 中间文件目录：`$REPO_ROOT/.bizglance/intermediate/`
+>
+> 先读取 `.bizglance/intermediate/repo-context.json` 和 `.bizglance/intermediate/codegraph-context.json` 了解仓库结构。
+> 然后读取 entityCandidates 中引用的源文件（特别是 model/、entity/、domain/ 包下的类），获取字段定义和注解信息。
+>
+> 排除测试类、配置类、工具类，只保留真正的业务领域对象。
+> 为每个业务对象提供中文业务名、模块归属和有意义的描述。
+>
+> 将结果写入 `.bizglance/intermediate/business-object-findings.json`。
+
+### 2.2 business-flow-agent
+
+调度 business-flow-agent 识别业务流转关系。
+
+Agent 定义文件：`<SKILL_DIR>/agents/business-flow-agent.md`
+
+Dispatch prompt：
+
+> 分析 `$REPO_ROOT` 中的仓库，识别业务对象之间的流转关系。
+>
+> 项目根目录：`$REPO_ROOT`
+> 中间文件目录：`$REPO_ROOT/.bizglance/intermediate/`
+>
+> 先读取 `.bizglance/intermediate/business-object-findings.json` 了解已识别的业务对象。
+> 然后读取 Controller 和 Service 源文件，分析方法中的对象创建、更新和引用关系。
+>
+> 只识别有业务意义的关系（creates/updates/references），不把技术依赖当业务关系。
+> 每条关系必须引用已有的业务对象。
+>
+> 将结果写入 `.bizglance/intermediate/business-flow-findings.json`。
+
+### 2.3 status-mutation-agent
+
+调度 status-mutation-agent 识别状态变更。
+
+Agent 定义文件：`<SKILL_DIR>/agents/status-mutation-agent.md`
+
+Dispatch prompt：
+
+> 分析 `$REPO_ROOT` 中的仓库，识别业务对象中的状态字段和状态转换。
+>
+> 项目根目录：`$REPO_ROOT`
+> 中间文件目录：`$REPO_ROOT/.bizglance/intermediate/`
+>
+> 先读取 `.bizglance/intermediate/business-object-findings.json`。
+> 然后读取实体类和相关服务类源文件，查找状态字段（如 status、state）和修改这些字段的方法。
+>
+> 只在有实际代码证据时才生成 finding，不从枚举名推断。
+>
+> 将结果写入 `.bizglance/intermediate/status-mutation-findings.json`。
+
+### 2.4 field-lineage-agent
+
+调度 field-lineage-agent 识别字段血缘。
+
+Agent 定义文件：`<SKILL_DIR>/agents/field-lineage-agent.md`
+
+Dispatch prompt：
+
+> 分析 `$REPO_ROOT` 中的仓库，识别业务对象的字段来源和计算关系。
+>
+> 项目根目录：`$REPO_ROOT`
+> 中间文件目录：`$REPO_ROOT/.bizglance/intermediate/`
+>
+> 先读取 `.bizglance/intermediate/business-object-findings.json`。
+> 然后读取实体类和 DTO 类源文件，分析字段的关联、映射和计算关系。
+>
+> 只在代码中有明确证据时生成 finding。
+>
+> 将结果写入 `.bizglance/intermediate/field-lineage-findings.json`。
+
+### 并行调度
+
+以上 4 个 agent **可以并行调度**（使用 Agent tool 的并行调用能力）。business-object-agent 建议先完成，其他 3 个可以同时运行。
+
+> Phase 2 complete. 业务对象 <N> 个，流转 <M> 条，状态变更 <P> 个，字段血缘 <Q> 条。
+
+---
+
+## Phase 3 — 合成
+
+> `[Phase 3/5] 合成 BizGlance 文档...`
+
+### 3.1 确定性审查
+
+运行 findings 审查脚本：
 
 ```bash
-bizglance analyze <repo> --context .bizglance/intermediate/codegraph-assisted-input.json --out .bizglance/bizglance.json
+node "<SKILL_DIR>/scripts/validate-findings.mjs" "$REPO_ROOT/.bizglance/intermediate"
 ```
 
-Use `--full` to ignore cached intermediate files. Use `--review` to reuse existing BizGlance output and revalidate or preview it.
+### 3.2 合并 findings
 
-## Phase 3.5: Deterministic Review
-
-Always run `skills/bizglance/scripts/validate-findings.mjs` after agent findings are present and before assemble. Save the output as `.bizglance/intermediate/review-warnings.json`.
-
-Then run the prompt reviewers when the user passes `--review`, when high-confidence findings have weak evidence, or when deterministic review emits warnings:
-
-- `evidence-reviewer`
-- `business-graph-reviewer`
-
-Reviewers must not add new business conclusions. They may recommend warnings, downgrades, removals, or normalizations.
-
-## Phase 4: Validate
-
-Run:
+运行合并脚本：
 
 ```bash
-bizglance validate .bizglance/bizglance.json --kind document
+node "<SKILL_DIR>/scripts/merge-business-findings.mjs" "$REPO_ROOT/.bizglance/intermediate" "$REPO_ROOT/.bizglance/intermediate/codegraph-assisted-input.json"
 ```
 
-Fatal validation failures stop the workflow. Non-fatal confidence or evidence concerns should be reported as warnings and preserved in `meta.warnings` when supported.
+### 3.3 生成 BizGlance 文档
 
-## Phase 5: Serve
-
-Unless the user passes `--no-serve`, run:
+运行 CLI analyze 命令：
 
 ```bash
-bizglance serve --data .bizglance/bizglance.json
+pnpm --filter @bizglance/cli dev analyze "$REPO_ROOT" --context "$REPO_ROOT/.bizglance/intermediate/codegraph-assisted-input.json" --out "$REPO_ROOT/.bizglance/bizglance.json" --lens codegraph-assisted
 ```
 
-Report the local URL. If the web preview fails, keep the generated JSON and give the manual `bizglance serve` command.
+### 3.4 校验文档
 
-## Progress Updates
+```bash
+pnpm --filter @bizglance/cli dev validate "$REPO_ROOT/.bizglance/bizglance.json" --kind document
+```
 
-Report progress at each phase using short, concrete messages:
+如果校验失败，停止并报告错误。
 
-- `Phase 0/5: 初始化 .bizglance 工作目录`
-- `Phase 1/5: 采集 CodeGraph 结构事实`
-- `Phase 2/5: 归纳业务 findings`
-- `Phase 3/5: 合成 BizGlance 文档`
-- `Phase 4/5: 校验输出契约`
-- `Phase 5/5: 启动业务工作台`
+> Phase 3 complete. BizGlance 文档已生成。
+
+---
+
+## Phase 4 — Reviewer 审查
+
+> `[Phase 4/5] 审查业务图谱质量...`
+
+如果 `--review` 参数存在，或者 Phase 2 的 findings 看起来需要审查（例如缺少 evidence），调度审查 agent：
+
+### evidence-reviewer
+
+Agent 定义文件：`<SKILL_DIR>/agents/evidence-reviewer.md`
+
+Dispatch prompt：
+
+> 审查 `$REPO_ROOT/.bizglance/intermediate/` 下所有 findings 文件的证据质量。
+> 读取 codegraph-context.json 和所有 *-findings.json，检查路径、行号和符号引用的真实性。
+> 将审查结果写入 `$REPO_ROOT/.bizglance/intermediate/review-warnings.json`。
+
+### business-graph-reviewer
+
+Agent 定义文件：`<SKILL_DIR>/agents/business-graph-reviewer.md`
+
+Dispatch prompt：
+
+> 审查 `$REPO_ROOT/.bizglance/intermediate/` 下所有 findings 文件的一致性。
+> 检查重复对象、悬空引用和置信度问题。
+> 将审查结果追加到 `$REPO_ROOT/.bizglance/intermediate/review-warnings.json`。
+
+审查完成后，如果有 warnings，重新运行 Phase 3 的合并和生成步骤以应用 downgrades。
+
+> Phase 4 complete. 审查发现 <N> 条 warnings。
+
+---
+
+## Phase 5 — 启动工作台
+
+如果 `$ARGUMENTS` 不包含 `--no-serve`：
+
+> `[Phase 5/5] 启动业务工作台...`
+
+```bash
+pnpm --filter @bizglance/cli dev serve --data "$REPO_ROOT/.bizglance/bizglance.json"
+```
+
+报告预览 URL。
+
+> Phase 5 complete. 业务工作台已启动：<URL>
+
+如果包含 `--no-serve`，跳过此步并报告 `.bizglance/bizglance.json` 的路径。
+
+---
+
+## 手动 Context 模式
+
+如果 `$ARGUMENTS` 包含 `--context <file>`，跳过 Phase 1 和 Phase 2，直接使用指定的 context 文件：
+
+```bash
+pnpm --filter @bizglance/cli dev analyze "$REPO_ROOT" --context "<file>" --out "$REPO_ROOT/.bizglance/bizglance.json"
+```
+
+然后继续 Phase 3.4 → Phase 4 → Phase 5。

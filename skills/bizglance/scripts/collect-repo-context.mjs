@@ -186,19 +186,33 @@ function collectEntityCandidates(repoRoot, filePath, content) {
   const relPath = relativePath(repoRoot, filePath);
   const name = basename(filePath, extname(filePath));
   const symbols = detectSymbols(content);
+
+  if (/\btest\b|\btests\b/i.test(relPath) || /Tests?$/.test(name)) {
+    return [];
+  }
+
   const fileLooksLikeEntity = /(entity|model|domain|dto|schema)/i.test(filePath) || /^[A-Z][A-Za-z0-9_]+$/.test(name);
 
   if (!fileLooksLikeEntity) {
     return [];
   }
 
-  return (symbols.length > 0 ? symbols : [name])
-    .filter((symbol) => !/(Controller|Service|Repository|Mapper|Route|Router|Handler)$/.test(symbol))
-    .map((symbol) => ({
-      filePath: relPath,
-      technicalName: symbol,
-      line: findLine(content, symbol)
-    }));
+  const EXCLUDED_SUFFIXES = /(?:Controller|Service|Repository|Mapper|Route|Router|Handler|Configuration|Config|Formatter|Validator|Application|RuntimeHints|Tests?)$/;
+  const candidates = (symbols.length > 0 ? symbols : [name])
+    .filter((symbol) => !EXCLUDED_SUFFIXES.test(symbol) && symbol !== "package-info");
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const isModelPackage = /(?:\/|^)(model|entity|domain)\//i.test(relPath);
+
+  return candidates.map((symbol) => ({
+    filePath: relPath,
+    technicalName: symbol,
+    line: findLine(content, symbol),
+    priority: isModelPackage ? "high" : "medium"
+  }));
 }
 
 function collectStatusCandidates(repoRoot, filePath, content) {

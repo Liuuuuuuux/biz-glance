@@ -10,3 +10,4 @@ packages/web/public/current.bizglance.json
 .superpowers/
 *.artifact.json
 bizglance-business-workbench.html
+.bizglance/

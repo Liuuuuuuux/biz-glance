@@ -1,25 +1,18 @@
 {
   "name": "bizglance",
+  "description": "Business knowledge graph analysis — understand how your codebase actually works from a business perspective",
   "version": "0.1.0",
-  "description": "BizGlance business knowledge graph workflow plugin",
   "author": {
-    "name": "BizGlance"
+    "name": "Liuuuuuuux"
   },
-  "skills": "../skills/",
-  "interface": {
-    "displayName": "BizGlance",
-    "shortDescription": "Analyze local repos into business knowledge graphs.",
-    "longDescription": "BizGlance adds a local agent workflow for collecting deterministic repository facts, generating LLM business findings, validating outputs, and previewing the workbench.",
-    "developerName": "BizGlance",
-    "category": "Productivity",
-    "capabilities": [
-      "Write",
-      "Interactive"
-    ],
-    "defaultPrompt": [
-      "/bizglance . --language zh",
-      "Run bizglance workflow . --no-serve",
-      "Review the current .bizglance graph and explain key business objects."
-    ]
-  }
+  "homepage": "https://github.com/Liuuuuuuux/biz-glance",
+  "repository": "https://github.com/Liuuuuuuux/biz-glance",
+  "license": "MIT",
+  "keywords": [
+    "business-analysis",
+    "knowledge-graph",
+    "codebase-understanding",
+    "domain-analysis",
+    "codegraph"
+  ]
 }

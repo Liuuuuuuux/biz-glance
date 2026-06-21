@@ -1,0 +1,15 @@
+{
+  "name": "bizglance",
+  "metadata": {
+    "description": "Business knowledge graph analysis — understand how your codebase actually works from a business perspective"
+  },
+  "owner": {
+    "name": "Liuuuuuuux"
+  },
+  "plugins": [
+    {
+      "name": "bizglance",
+      "source": "."
+    }
+  ]
+}

@@ -56,6 +56,13 @@ type ReviewFindingsResult = {
   normalizations: unknown[];
 };
 
+type EntityCandidate = {
+  filePath: string;
+  technicalName: string;
+  line?: number;
+  priority?: string;
+};
+
 type RepoContext = {
   repo?: {
     name?: string;
@@ -75,11 +82,7 @@ type RepoContext = {
     route?: string;
     line?: number;
   }>;
-  entityCandidates?: Array<{
-    filePath: string;
-    technicalName: string;
-    line?: number;
-  }>;
+  entityCandidates?: EntityCandidate[];
 };
 
 function normalizePathForJson(filePath: string) {
@@ -146,6 +149,7 @@ function buildBusinessObjectFindingsFromRepoContext(repoContext: RepoContext, la
         ? "Deterministic entity candidate. Run the LLM business agents for a business name and richer description."
         : "确定性实体候选。运行 LLM 业务 agent 后可补充业务名和更完整说明。",
     tags: ["entity-candidate"],
+    priority: item.priority ?? "medium",
     evidence: {
       nodeName: item.technicalName,
       filePath: item.filePath,
